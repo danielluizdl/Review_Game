@@ -54,6 +54,7 @@ def _process_video(video_path, cfg, use_checkpoint=True):
     from capture.checkpoint import save_checkpoint, load_checkpoint
     from engine.hand_tracker import HandTracker, print_summary, validate_hands
     from output.json_writer import write_hands
+    from output.hh_writer_ps import write_hands_ps
 
     output_dir      = "key_frames"
     checkpoint_path = os.path.join("output", f".checkpoint_{Path(video_path).stem}.json")
@@ -134,13 +135,16 @@ def _process_video(video_path, cfg, use_checkpoint=True):
     print_summary(hands)
 
     out_path = write_hands(hands, video_path)
+    ps_path  = write_hands_ps(hands, video_path)
 
     # Remove checkpoint após conclusão bem-sucedida
     if use_checkpoint and os.path.exists(checkpoint_path):
         os.remove(checkpoint_path)
         print(f"Checkpoint removido. Resultado final: {out_path}")
+        print(f"PokerStars HH: {ps_path}")
     else:
         print(f"\nResultado salvo em: {out_path}")
+        print(f"PokerStars HH: {ps_path}")
 
     print(f"Processamento concluído: {len(all_results)} frames | {len(hands)} mãos detectadas.")
 

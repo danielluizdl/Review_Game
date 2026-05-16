@@ -125,6 +125,7 @@ class Hand:
     hero_cards:  list[str]  = field(default_factory=list)
     actions:     list       = field(default_factory=list)   # list[Action]
     winner:      str        = ""
+    blinds:      str        = ""   # OCR do título: "0.05/0.1/0.2(0.05)"
 
     def duration(self) -> float:
         return self.end_ts - self.start_ts
@@ -249,6 +250,7 @@ class HandTracker:
                 seats           = data.get("seats", {})
                 bets            = data.get("bets", {})
                 table_id        = data.get("table_id", "")
+                blinds_ocr      = data.get("blinds", "")
                 community_cards = data.get("community_cards", [])
                 hero_cards      = data.get("hero_cards", [])
                 n_cards         = len(community_cards)
@@ -270,6 +272,7 @@ class HandTracker:
                         table_id=table_id,
                         hand_number=hand_counters[tk],
                         start_ts=ts,
+                        blinds=blinds_ocr,
                     )
                     for sk, info in seats.items():
                         current.players[sk] = {

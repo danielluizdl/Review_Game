@@ -45,6 +45,7 @@ def _serialize_hand(h: Hand) -> dict:
         "end_ts":       h.end_ts,
         "duration_sec": round(h.duration(), 1),
         "pot_peak_bb":  h.pot_peak,
+        "blinds":       h.blinds,
         "hero_cards":   h.hero_cards,
         "winner":       h.winner,
         "players":      _serialize_players(h),
