@@ -55,6 +55,18 @@ REGIONS = {
     "cards_seat_7": (80,  310, 80, 45),
     "cards_seat_8": (20,  150, 80, 45),
 
+    # Label "Winner." exibido junto ao seat vencedor ao fim de cada mão.
+    # Coordenadas placeholder — calibrar com calibrate_interactive.py.
+    # Posicionados ligeiramente abaixo (seats 1-4) ou acima (seats 5-8) do box de stack.
+    "winner_label_seat_1": (260, 102, 140, 18),
+    "winner_label_seat_2": (370,  77, 140, 18),
+    "winner_label_seat_3": (530, 102, 140, 18),
+    "winner_label_seat_4": (680, 197, 140, 18),
+    "winner_label_seat_5": (620, 290, 140, 18),
+    "winner_label_seat_6": (370, 360, 140, 18),
+    "winner_label_seat_7": ( 80, 290, 140, 18),
+    "winner_label_seat_8": ( 20, 197, 140, 18),
+
 }
 
 # Posição do dealer (BTN) é inferida a partir do SB/BB:

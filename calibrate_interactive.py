@@ -37,6 +37,8 @@ def item_color(item):
         return TABLE_COLORS[item[5:]]
     if item in REGION_COLORS:
         return REGION_COLORS[item]
+    if item.startswith("winner_label_"):
+        return (50, 255, 50)    # verde-limão — label de vencedor
     if item.startswith("seat_"):
         return (0, 200, 255)
     if item.startswith("bet_"):
