@@ -240,9 +240,35 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
     community_cards = _parse_cards(texts.get("community_cards", ""))
     hero_cards      = _parse_cards(texts.get("hero_cards", ""))
 
+    # Action labels e winner labels: lidos somente se as regiões estão no config
+    _LABEL_MAP = {
+        "fold": "fold", "folds": "fold", "desistir": "fold",
+        "call": "call", "calls": "call", "fazer call": "call",
+        "check": "check", "checks": "check", "passar": "check",
+        "raise": "raise", "raises": "raise", "aumentar": "raise",
+        "bet": "bet", "bets": "bet", "apostar": "bet",
+    }
+    action_labels: dict[str, str] = {}
+    for i in range(1, 9):
+        key = f"action_label_seat_{i}"
+        if key in regions:
+            raw = texts.get(key, "").strip().lower()
+            mapped = _LABEL_MAP.get(raw)
+            if mapped:
+                action_labels[f"seat_{i}"] = mapped
+
+    winner_labels: dict[str, bool] = {}
+    for i in range(1, 9):
+        key = f"winner_label_seat_{i}"
+        if key in regions:
+            raw = texts.get(key, "").strip().lower()
+            if "winner" in raw:
+                winner_labels[f"seat_{i}"] = True
+
     return {"table_id": table_id, "blinds": blinds, "game_type": game_type,
             "pot": pot, "seats": seats, "bets": bets,
-            "community_cards": community_cards, "hero_cards": hero_cards}
+            "community_cards": community_cards, "hero_cards": hero_cards,
+            "action_labels": action_labels, "winner_labels": winner_labels}
 
 
 # ── APIs de compatibilidade (usadas por test_ocr.py) ────────────────────────

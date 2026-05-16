@@ -295,5 +295,63 @@ class TestPlaceholderSuitsNoCollision(unittest.TestCase):
         self.assertEqual(len(set(all_cards)), 5)
 
 
+class TestHeroNameInActionLines(unittest.TestCase):
+
+    def test_hero_name_replaced_by_Hero_in_actions(self):
+        h = _make_hand(hero_cards=["A", "K"])
+        h.hero_seat = "seat_1"   # Alice é o hero
+        h.actions = [
+            Action("seat_1", "Alice", "BTN", "fold", 0.0, "preflop", 3.0),
+            Action("seat_2", "Bob",   "SB",  "fold", 0.0, "preflop", 3.0),
+        ]
+        output = _hand_to_ps(h)
+        self.assertIn("Hero: folds", output)
+        self.assertNotIn("Alice: folds", output)
+        self.assertIn("Bob: folds", output)
+
+    def test_no_hero_substitution_without_hero_seat(self):
+        h = _make_hand(hero_cards=[])
+        h.actions = [
+            Action("seat_1", "Alice", "BTN", "fold", 0.0, "preflop", 3.0),
+        ]
+        output = _hand_to_ps(h)
+        self.assertIn("Alice: folds", output)
+        self.assertNotIn("Hero: folds", output)
+
+
+class TestSummaryLabelsOnlyForBlinds(unittest.TestCase):
+
+    def test_btn_sb_bb_str_have_labels(self):
+        h = _make_hand(n_players=5)
+        h.positions = {
+            "seat_1": "BTN",
+            "seat_2": "SB",
+            "seat_3": "BB",
+            "seat_4": "STR",
+            "seat_5": "CO",
+        }
+        output = _hand_to_ps(h)
+        summary = output.split("*** SUMMARY ***")[1]
+        self.assertIn("(button)", summary)
+        self.assertIn("(small blind)", summary)
+        self.assertIn("(big blind)", summary)
+        self.assertIn("(straddle)", summary)
+
+    def test_non_blind_position_has_no_label(self):
+        h = _make_hand(n_players=5)
+        h.positions = {
+            "seat_1": "BTN",
+            "seat_2": "SB",
+            "seat_3": "BB",
+            "seat_4": "STR",
+            "seat_5": "CO",   # Eve é CO
+        }
+        output = _hand_to_ps(h)
+        summary = output.split("*** SUMMARY ***")[1]
+        # Eve (seat_5) não deve ter label de posição
+        self.assertNotIn("Eve (", summary)
+        self.assertNotIn("(CO)", summary)
+
+
 if __name__ == "__main__":
     unittest.main()

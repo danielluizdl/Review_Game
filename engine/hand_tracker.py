@@ -46,12 +46,10 @@ def _find_positions(bets: dict, seat_order: list[str], seats: dict) -> dict[str,
     Infere posições a partir das apostas no início da mão.
     SB = menor aposta, BB = segunda menor, STR = terceira (straddle obrigatório).
     BTN = assento imediatamente antes do SB na ordem horária.
-    Demais posições distribuídas em sentido horário a partir do BTN.
+    Demais posições distribuídas em sentido horário a partir do STR/BB.
 
-    Straddle obrigatório (>= 4 jogadores):
-    Quando 4+ assentos ativos e 3 apostas iniciais detectadas, o terceiro blind
-    é o STR (straddle = 2BB). Posições: BTN → SB → BB → STR → demais.
-    Com 3 ou menos jogadores: apenas SB + BB, sem straddle.
+    Atribui BTN/SB/BB/STR diretamente dos dados de aposta para evitar
+    conflito entre a distribuição horária e o override do straddle.
     """
     if not bets or not seat_order:
         return {}
@@ -60,38 +58,43 @@ def _find_positions(bets: dict, seat_order: list[str], seats: dict) -> dict[str,
     if len(active) < 2:
         return {}
 
-    # bet_seats[0] = SB (menor), [1] = BB, [2] = STR se existir
     bet_seats = sorted(bets.items(), key=lambda x: x[1])
     if len(bet_seats) < 2:
         return {}
 
     sb_seat = bet_seats[0][0]
-    if sb_seat not in active:
+    bb_seat = bet_seats[1][0]
+    if sb_seat not in active or bb_seat not in active:
         return {}
 
-    # Straddle obrigatório: 4+ jogadores ativos E 3 apostas iniciais detectadas.
-    # Se len(bets) >= 3 mas len(active) < 4: ignorar straddle (edge case de all-in
-    # em mesa curta — apostas extras não representam blind de straddle).
-    has_straddle = len(active) >= 4 and len(bet_seats) >= 3
+    has_straddle = (len(active) >= 4 and len(bet_seats) >= 3
+                    and bet_seats[2][0] in active)
+    str_seat = bet_seats[2][0] if has_straddle else None
 
     sb_idx   = active.index(sb_seat)
-    btn_idx  = (sb_idx - 1) % len(active)
-    btn_seat = active[btn_idx]
+    btn_seat = active[(sb_idx - 1) % len(active)]
 
-    n     = len(active)
-    names = _POSITION_NAMES.get(
-        n,
-        ["BTN", "SB", "BB", "STR"] + [f"P{i}" for i in range(n - 4)]
+    # Atribuição direta das posições cegas — sem risco de dupla atribuição
+    positions: dict[str, str] = {btn_seat: "BTN", sb_seat: "SB", bb_seat: "BB"}
+    if str_seat:
+        positions[str_seat] = "STR"
+
+    # Distribui posições restantes em sentido horário a partir do anchor (STR ou BB)
+    anchor     = str_seat if str_seat else bb_seat
+    anchor_idx = active.index(anchor)
+    n          = len(active)
+    n_fixed    = 4 if has_straddle else 3
+
+    pos_names_all = _POSITION_NAMES.get(
+        n, ["BTN", "SB", "BB", "STR"] + [f"P{i}" for i in range(n - 4)]
     )
+    remaining_names = pos_names_all[n_fixed:]
 
-    btn_abs   = active.index(btn_seat)
-    positions = {active[(btn_abs + i) % n]: name for i, name in enumerate(names)}
+    remaining_seats = [s for s in active if s not in positions]
+    remaining_seats.sort(key=lambda s: (active.index(s) - anchor_idx - 1) % n)
 
-    # Garante que o assento straddler (terceira aposta) está marcado como "STR".
-    if has_straddle:
-        str_seat = bet_seats[2][0]
-        if str_seat in positions:
-            positions[str_seat] = "STR"
+    for i, sk in enumerate(remaining_seats):
+        positions[sk] = remaining_names[i] if i < len(remaining_names) else f"P{i}"
 
     return positions
 
@@ -111,21 +114,23 @@ class Action:
 
 @dataclass
 class Hand:
-    table_key:   str
-    table_id:    str
-    hand_number: int
-    start_ts:    float
-    end_ts:      float      = 0.0
-    streets:     dict       = field(default_factory=lambda: {
+    table_key:    str
+    table_id:     str
+    hand_number:  int
+    start_ts:     float
+    end_ts:       float     = 0.0
+    streets:      dict      = field(default_factory=lambda: {
         "preflop": [], "flop": [], "turn": [], "river": []
     })
-    players:     dict       = field(default_factory=dict)
-    pot_peak:    float      = 0.0
-    positions:   dict       = field(default_factory=dict)
-    hero_cards:  list[str]  = field(default_factory=list)
-    actions:     list       = field(default_factory=list)   # list[Action]
-    winner:      str        = ""
-    blinds:      str        = ""   # OCR do título: "0.05/0.1/0.2(0.05)"
+    players:      dict      = field(default_factory=dict)
+    pot_peak:     float     = 0.0
+    positions:    dict      = field(default_factory=dict)
+    hero_cards:   list[str] = field(default_factory=list)
+    actions:      list      = field(default_factory=list)   # list[Action]
+    winner:       str       = ""
+    winner_label: str       = ""   # detectado via ROI — tem prioridade sobre winner
+    blinds:       str       = ""   # OCR do título: "0.05/0.1/0.2(0.05)"
+    hero_seat:    str       = ""   # seat_key do jogador hero
 
     def duration(self) -> float:
         return self.end_ts - self.start_ts
@@ -156,9 +161,14 @@ def _infer_actions(prev: dict, curr: dict,
     Infere ações comparando dois frames consecutivos da mesma mão.
 
     Algoritmo conservador:
-      - bet aumentou               → raise ou bet
-      - bet desapareceu + pot subiu proporcionalmente → call
-      - bet desapareceu + pot não subiu              → fold
+      - bet aumentou: compara com o máximo dos outros seats no frame atual
+          · igualou o máximo → call (limp incluso)
+          · superou o máximo → raise
+          · primeiro bet (sem outros) → bet
+      - bet desapareceu: usa pot_delta para distinguir call/fold/ambíguo
+          · pot_delta ≈ prev_bet → call
+          · pot_delta pequeno    → fold
+          · pot_delta muito alto → múltiplas ações no intervalo → omitir
       - stack caiu sem bet visível → unknown (possível all-in silencioso)
     """
     actions: list[Action] = []
@@ -181,15 +191,24 @@ def _infer_actions(prev: dict, curr: dict,
         pos  = positions.get(sk, "")
 
         if curr_bet > prev_bet + 0.05:
-            amount = round(curr_bet - prev_bet, 2)
-            action_type = "raise" if prev_bet > 0.05 else "bet"
+            amount     = round(curr_bet - prev_bet, 2)
+            others_max = max((v for k, v in curr_bets.items() if k != sk), default=0.0)
+            if curr_bet <= others_max + 0.02:
+                action_type = "call"           # igualou o máximo (limp ou call)
+            elif others_max > 0.05:
+                action_type = "raise"          # superou uma aposta existente
+            else:
+                action_type = "bet"            # primeiro bet da rua
             actions.append(Action(sk, name, pos, action_type, amount, street, ts))
 
         elif prev_bet > 0.05 and curr_bet < 0.05:
-            if pot_delta >= prev_bet * 0.9:
+            if pot_delta < 0:
+                pass                           # impossível — ignorar
+            elif pot_delta >= prev_bet * 0.9 and pot_delta <= prev_bet * 2.5:
                 actions.append(Action(sk, name, pos, "call", round(prev_bet, 2), street, ts))
-            else:
+            elif pot_delta < prev_bet * 0.5:
                 actions.append(Action(sk, name, pos, "fold", 0.0, street, ts))
+            # else: múltiplas ações no intervalo → omitir (falso positivo)
 
         elif (prev_bet < 0.05 and curr_bet < 0.05
               and prev_stack is not None and curr_stack is not None):
@@ -201,6 +220,27 @@ def _infer_actions(prev: dict, curr: dict,
 
 
 # ── tracker ───────────────────────────────────────────────────────────────────
+
+def _derive_hero_seat(regions: dict) -> str:
+    """Retorna o seat_key mais próximo da região hero_cards, se configurada."""
+    hero_region = regions.get("hero_cards")
+    if not hero_region:
+        return ""
+    hx = hero_region[0] + hero_region[2] / 2
+    hy = hero_region[1] + hero_region[3] / 2
+    best_sk, best_d = "", float("inf")
+    for i in range(1, 9):
+        sk = f"seat_{i}"
+        if sk not in regions:
+            continue
+        r  = regions[sk]
+        cx = r[0] + r[2] / 2
+        cy = r[1] + r[3] / 2
+        d  = (cx - hx) ** 2 + (cy - hy) ** 2
+        if d < best_d:
+            best_d, best_sk = d, sk
+    return best_sk
+
 
 class HandTracker:
     """
@@ -222,9 +262,13 @@ class HandTracker:
 
     def __init__(self, cfg: dict | None = None):
         self._seat_orders: dict[str, list[str]] = {}
+        self._hero_seats:  dict[str, str]       = {}
         if cfg:
             for tk, regs in cfg.get("regions", {}).items():
                 self._seat_orders[tk] = _clockwise_order(regs)
+                hs = _derive_hero_seat(regs)
+                if hs:
+                    self._hero_seats[tk] = hs
 
     def process_sequence(self, ocr_results: list[dict]) -> list[Hand]:
         """
@@ -232,12 +276,12 @@ class HandTracker:
                         community_cards, hero_cards, ...}}}, ...]
         Retorna lista de Hand encerradas, ordenadas por timestamp de início.
         """
-        all_hands:      list[Hand]              = []
-        active:         dict[str, Hand | None]  = {}
-        hand_counters:  dict[str, int]          = {}
-        prev_pots:      dict[str, float | None] = {}
-        prev_n_cards:   dict[str, int]          = {}
-        prev_frame_data: dict[str, dict]        = {}   # tk → último frame para inferência de ações
+        all_hands:       list[Hand]              = []
+        active:          dict[str, Hand | None]  = {}
+        hand_counters:   dict[str, int]          = {}
+        prev_pots:       dict[str, float | None] = {}
+        prev_n_cards:    dict[str, int]          = {}
+        prev_frame_data: dict[str, dict]         = {}   # tk → último frame para inferência
 
         for entry in ocr_results:
             ts = entry["timestamp"]
@@ -253,6 +297,7 @@ class HandTracker:
                 blinds_ocr      = data.get("blinds", "")
                 community_cards = data.get("community_cards", [])
                 hero_cards      = data.get("hero_cards", [])
+                winner_labels   = data.get("winner_labels", {})
                 n_cards         = len(community_cards)
 
                 prev_pot = prev_pots.get(tk)
@@ -273,6 +318,7 @@ class HandTracker:
                         hand_number=hand_counters[tk],
                         start_ts=ts,
                         blinds=blinds_ocr,
+                        hero_seat=self._hero_seats.get(tk, ""),
                     )
                     for sk, info in seats.items():
                         current.players[sk] = {
@@ -306,6 +352,15 @@ class HandTracker:
                     if not current.hero_cards and hero_cards:
                         current.hero_cards = hero_cards
 
+                    # Winner por label tem prioridade sobre stack delta
+                    if winner_labels:
+                        for sk, is_winner in winner_labels.items():
+                            if is_winner:
+                                name = current.players.get(sk, {}).get("name", "")
+                                if name:
+                                    current.winner_label = name
+                                    break
+
                     # Atualiza posições se chegaram apostas num frame subsequente
                     if bets and not current.positions:
                         seat_order = self._seat_orders.get(tk, [])
@@ -323,8 +378,8 @@ class HandTracker:
                             "stack_end":   info.get("stack"),
                         }
 
-                    # Inferência de ações entre frames consecutivos
-                    if tk in prev_frame_data:
+                    # Inferência de ações — pula o primeiro frame (blinds não são ações)
+                    if tk in prev_frame_data and ts != current.start_ts:
                         new_actions = _infer_actions(
                             prev_frame_data[tk], frame_data,
                             current.positions, current.players, street

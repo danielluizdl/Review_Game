@@ -104,24 +104,29 @@ def _seat_num(sk: str) -> int:
     return int(sk.split("_")[1])
 
 
+_SUMMARY_LABELS = {
+    "BTN": "button",
+    "SB":  "small blind",
+    "BB":  "big blind",
+    "STR": "straddle",
+}
+
+
 def _seat_role(sk: str, h: Hand) -> str:
-    roles = {
-        "BTN": "(button) ",
-        "SB":  "(small blind) ",
-        "BB":  "(big blind) ",
-        "STR": "(straddle) ",
-    }
-    return roles.get(h.positions.get(sk, ""), "")
+    label = _SUMMARY_LABELS.get(h.positions.get(sk, ""), "")
+    return f"({label}) " if label else ""
 
 
 def _format_action(action: Action, bb_value: float,
-                   currency: str, committed: dict) -> str:
+                   currency: str, committed: dict,
+                   hero_name: str = "") -> str:
     """
     Formata uma Action para o texto PokerStars.
     'committed' acumula o total apostado pelo jogador na rua corrente
     para calcular corretamente o 'to' nas linhas de raise.
+    Se hero_name for fornecido, substitui o nome do hero por "Hero".
     """
-    player = action.player
+    player = "Hero" if hero_name and action.player == hero_name else action.player
     amt    = round(action.amount_bb * bb_value, 2)
     act    = action.action
 
@@ -152,6 +157,11 @@ def _hand_to_ps(h: Hand) -> str:
     str_val  = blinds["str"]
     ante     = blinds["ante"]
     currency = blinds["currency"]
+
+    # Hero: usa winner_label se disponível; substitui nome real por "Hero" nas actions
+    winner    = getattr(h, "winner_label", "") or h.winner
+    hero_seat = getattr(h, "hero_seat", "")
+    hero_name = h.players.get(hero_seat, {}).get("name", "") if hero_seat else ""
 
     hand_id = int(h.start_ts * 1000) * 100 + h.hand_number
 
@@ -253,7 +263,7 @@ def _hand_to_ps(h: Hand) -> str:
     def _emit_actions(street_name: str) -> None:
         committed: dict[str, float] = {}
         for action in (a for a in h.actions if a.street == street_name):
-            line = _format_action(action, bb, currency, committed)
+            line = _format_action(action, bb, currency, committed, hero_name)
             if line:
                 lines.append(line)
 
@@ -277,7 +287,7 @@ def _hand_to_ps(h: Hand) -> str:
         _emit_actions("river")
 
     # ── showdown ──────────────────────────────────────────────────────────────
-    if h.winner and h.winner != "split" and h.hero_cards:
+    if winner and winner != "split" and h.hero_cards:
         used_sd: set[str] = set()
         hero_sd = _assign_placeholder_suits(h.hero_cards, used_sd)
         lines.append("*** SHOW DOWN ***")
@@ -296,9 +306,9 @@ def _hand_to_ps(h: Hand) -> str:
         name = info["name"]
         role = _seat_role(sk, h)
 
-        if h.winner == name:
+        if winner == name:
             outcome = f"collected ({currency}{pot_real:.2f})"
-        elif h.winner == "split":
+        elif winner == "split":
             split_amt = round(pot_real / 2, 2)
             outcome = f"collected ({currency}{split_amt:.2f})"
         else:
