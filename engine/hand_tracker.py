@@ -400,6 +400,33 @@ def _detect_winner(players: dict) -> str:
     return players[winners[0]].get("name", "")
 
 
+def validate_hands(hands: list[Hand]) -> tuple[list[Hand], list[dict]]:
+    """Separa mãos válidas de inválidas. Retorna (válidas, rejeitadas com motivo)."""
+    valid, rejected = [], []
+    for h in hands:
+        reason = _rejection_reason(h)
+        if reason:
+            rejected.append({"hand": h.summary(), "reason": reason})
+        else:
+            valid.append(h)
+    return valid, rejected
+
+
+def _rejection_reason(h: Hand) -> str:
+    """Retorna motivo de rejeição, ou '' se a mão é válida."""
+    named = [p for p in h.players.values() if p.get("name")]
+    if len(named) < 2:
+        return "menos de 2 jogadores com nome identificado"
+    if h.duration() < 5.0:
+        return f"duração muito curta ({h.duration():.1f}s) — provável falso positivo"
+    if h.pot_peak < 1.0:
+        return f"pot_peak irreal ({h.pot_peak} BB)"
+    total_frames = sum(len(f) for f in h.streets.values())
+    if total_frames < 2:
+        return "apenas 1 frame capturado — dados insuficientes"
+    return ""
+
+
 def print_summary(hands: list[Hand]) -> None:
     """Imprime resumo das mãos agrupado por mesa."""
     if not hands:
