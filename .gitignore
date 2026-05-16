@@ -1,0 +1,32 @@
+# Ambiente virtual
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Vídeos e imagens de calibração (arquivos pesados)
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.png
+*.jpg
+*.jpeg
+
+# Frames gerados pelo pipeline
+key_frames/
+data/
+
+# Saídas JSON (manter só o .gitkeep)
+output/*.json
+
+# Sessão do Claude
+.claude/
+
+# IDEs
+.vscode/
+.idea/
+*.swp

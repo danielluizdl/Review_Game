@@ -1,0 +1,5 @@
+opencv-python==4.10.0.84
+numpy==1.26.4
+Pillow==10.4.0
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.26.0
