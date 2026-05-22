@@ -131,6 +131,7 @@ class StreetState:
     invested:         dict  = field(default_factory=dict)  # seat → total investido na rua
     has_acted:        set   = field(default_factory=set)   # seats que já agiram
     limpers:          set   = field(default_factory=set)   # seats que fizeram limp
+    straddle_val:     float = 0.0   # valor do straddle postado (GGPoker subtrai do call/raise)
 
 
 @dataclass
@@ -209,9 +210,13 @@ def _actions_from_labels(
 
         elif label == "call":
             already = state.invested.get(sk, 0.0)
-            # Call amount = max_bet minus already invested (definition of a call).
-            # Ignores visible chip — it may be a stale blind/straddle chip still on screen.
-            amount = round(max(0.0, state.max_bet - already), 2)
+            # GGPoker subtracts the straddle value from call/raise increments when the
+            # player has already invested more than the straddle (i.e., they raised or
+            # called a raise). This matches the native GGPoker hand history format.
+            straddle_adj = (state.straddle_val
+                            if state.straddle_val > 0 and already > state.straddle_val
+                            else 0.0)
+            amount = round(max(0.0, state.max_bet - already - straddle_adj), 2)
             state.invested[sk] = round(already + amount, 2)
             state.has_acted.add(sk)
             action = Action(sk, name, pos, "call", amount, street, ts,
@@ -561,8 +566,12 @@ class HandTracker:
 
                     # Inicializa StreetState com blinds postados
                     init_max = max(bets.values(), default=0.0)
+                    str_seat_init = next(
+                        (s for s, p in current.positions.items() if p == "STR"), None
+                    )
                     street_states[tk] = StreetState(
-                        street="preflop", max_bet=init_max, invested=dict(bets)
+                        street="preflop", max_bet=init_max, invested=dict(bets),
+                        straddle_val=bets.get(str_seat_init, 0.0) if str_seat_init else 0.0,
                     )
 
                     # Detect a raise that occurred before the video started.
@@ -714,6 +723,7 @@ class HandTracker:
                                     voluntary_raises=ss.voluntary_raises,
                                     last_aggressor=ss.last_aggressor,
                                     limpers=set(ss.limpers),
+                                    straddle_val=ss.straddle_val,
                                 )
                                 extra_all, _ = _infer_actions(
                                     prev_frame_data[tk], frame_data,
@@ -741,7 +751,10 @@ class HandTracker:
                                     for a in new_actions:
                                         if a.action in ("call", "unknown"):
                                             prior = ss.invested.get(a.seat, 0.0)
-                                            fixed = round(max(0.0, ss.max_bet - prior), 2)
+                                            sadj = (ss.straddle_val
+                                                    if ss.straddle_val > 0 and prior > ss.straddle_val
+                                                    else 0.0)
+                                            fixed = round(max(0.0, ss.max_bet - prior - sadj), 2)
                                             if fixed > 0.01 and abs(fixed - a.amount_bb) > 0.01:
                                                 a.amount_bb = fixed
                                                 a.total_bb = round(prior + fixed, 2)

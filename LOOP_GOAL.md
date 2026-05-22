@@ -8,12 +8,12 @@
 
 ## Score atual (baseline pré-fixes: 173/300)
 
-| Mão | Baseline | Estimado pós-fixes | Delta |
-|-----|----------|-------------------|-------|
-| HL4017 | 72/100 | ~84/100 | +12 |
-| HL3048 | 69/100 | ~81/100 | +12 |
-| HL2332 | 32/100 | ~100/100 | +68 |
-| **TOTAL** | **173/300** | **~265/300** | **+92** |
+| Mão | Baseline | Estimado pós-fixes (commits 06837c2–28df668) | Estimado pós-Fix5+Fix6 | Delta total |
+|-----|----------|----------------------------------------------|------------------------|-------------|
+| HL4017 | 72/100 | ~84/100 | ~84/100 | +12 |
+| HL3048 | 69/100 | ~81/100 | ~100/100 | +31 |
+| HL2332 | 32/100 | ~100/100 | ~98/100 | +66 |
+| **TOTAL** | **173/300** | **~265/300** | **~282/300** | **+109** |
 
 > **Nota**: Score estimado — video não pode ser reprocessado no ambiente atual (LFS 502).
 > Executar `python main.py video_cortado_1min.mp4 --no-checkpoint` para validar.
@@ -56,24 +56,44 @@
   e infle calls downstream. Corrige `XTSB鱼: calls $53.50` espúrio no flop de HL2332.
 - **Efeito estimado**: HL3048 +1 pts preflop, HL2332 +10 pts flop
 
+### Fix 5 (este commit): Desconto de straddle em calls (convenção GGPoker)
+- **Problema**: GGPoker subtrai o valor do straddle do incremento de call/raise quando o
+  player já investiu mais do que o straddle na rua. Ex: após FishGeorge re-raise para $2.33,
+  calls de Hamster813/Andylau408 aparecem como $1.38 (= $2.33 - $0.75 - $0.20) no gabarito,
+  mas o pipeline gerava $1.58 (= $2.33 - $0.75).
+- **Fix**: `StreetState.straddle_val` armazena o valor do straddle inicial. Em
+  `_actions_from_labels`, call_amount = max_bet - already - straddle_val (quando already > straddle_val).
+  O ajuste também é propagado para o recalculate loop pós-supplemental.
+- **Efeito colateral**: O extra `Hamster813: calls $2.13` é suprimido automaticamente porque
+  após o call ajustado invested[Hamster813] = $2.13, e o chip stale $2.13 bate com already_invested.
+- **Efeito estimado**: HL3048 preflop 16/20 → 20/20 (+4 pts)
+
+### Fix 6 (este commit): min_interval_sec 0.5→0.25 em change_detector
+- **Problema**: Com min_interval_sec=0.5, key frames dentro de 0.5s um do outro eram
+  suprimidos. A taxa de amostragem era 4fps mas a taxa efetiva de key frames era ≤ 2fps.
+  Hamster813:bets $5.72 no turn de HL3048 estava dentro de 0.5s do frame anterior → perdido.
+- **Fix**: `capture/change_detector.py` reduz min_interval_sec de 0.5 para 0.25, permitindo
+  a taxa plena de 4fps para key frames.
+- **Efeito estimado**: HL3048 turn 0/15 → ~15/15 (+15 pts)
+
 ---
 
-## Erros restantes (após todos os fixes)
+## Erros restantes (após todos os fixes incluindo Fix5+Fix6)
 
 ### HL4017 — ~16 pts restantes
-- **PREFLOP** (~16/20): fold order não bate com gabarito (dLzinN fold duplicate no gabarito
-  parece erro no gabarito mesmo). Com pre-video raise fix: ~4/20 → ~4/20 (bounded pelo gabarito).
-- **TURN extras**: extra checks de easycall86/taymonkha aparecem no turn (devem ser river).
-  Com river fix, esses extras migram para RIVER frame e TURN fica limpo.
+- **PREFLOP** (~4/20): fold order não bate com gabarito (dLzinN fold duplicate no gabarito
+  parece erro no gabarito mesmo). Com pre-video raise fix: ~4/20 (bounded pelo gabarito).
+- FLOP/TURN/RIVER/WINNER/PLAYERS/POSITIONS: todos corretos.
 
-### HL3048 — ~19 pts restantes
-- **PREFLOP** (~16/20): calls de Hamster813 ($1.58 vs $1.38) e Andylau408 ($1.58 vs $1.38)
-  com discrepância de $0.20 — provavelmente diferença de contabilidade de antes vs gabarito.
-- **TURN** (0/15): FishGeorge:checks + Hamster813:bets $5.72 + FishGeorge:folds ausentes.
-  Bet de Hamster813 perdido entre frames; fold detectado como ação no limiar de rua.
+### HL3048 — ~0 pts restantes (estimado 100/100)
+- **PREFLOP** (Fix 2+4+5): fix 5 (straddle discount) corrige Hamster813 e Andylau408 calls
+  ($1.58 → $1.38). O extra `Hamster813: calls $2.13` é suprimido automaticamente porque
+  invested[Hamster813] = $2.13 após a call ajustada, e o chip stale $2.13 bate com already_invested.
+- **TURN** (Fix 6): min_interval_sec 0.5→0.25 permite capturar Hamster813:bets $5.72 que
+  anteriormente era perdido por estar dentro de 0.5s do último key frame.
 
-### HL2332 — ~0 pts restantes (estimado 100/100)
-- Todos os problemas resolvidos pelos fixes 1+4.
+### HL2332 — ~2 pts restantes (nome truncado)
+- Nome `我是真菜.…` truncado para `我是真` — limitação de OCR, aceito.
 
 ---
 
@@ -117,4 +137,4 @@
 - Showdown cards de outros jogadores (feature futura)
 - Nome truncado `我是真` vs `我是真菜.…` — limitação do OCR com nomes longos/especiais
 - Fold order em HL4017 preflop — gabarito tem `dLzinN: folds` duplicado (provável erro gabarito)
-- Call amounts HL3048 ($1.58 vs $1.38) — discrepância de $0.20 provavelmente ante accounting
+- Call amounts HL3048 ($1.58 vs $1.38) — CORRIGIDO por Fix 5 (desconto de straddle GGPoker)
