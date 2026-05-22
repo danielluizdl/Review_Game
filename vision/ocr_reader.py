@@ -476,8 +476,10 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
             x1i = min(x1 + margin, x2 - 1)
             x2i = max(x2 - margin, x1i + 1)
             community_zone_suits.append(detect_suit_by_color(table_img[y1:y2, x1i:x2i]))
-        # Count consecutive bright zones (max brightness >= 180 = white card background).
+        # Count consecutive bright zones (max brightness >= threshold = white card background).
         # Stops at first dark zone so background text ("NEXA POKER") is not counted.
+        # Zone 5 (river) uses a slightly lower threshold: card animation and compression
+        # can darken the rightmost card zone, causing river detection to fail.
         community_zone_count = 0
         for i in range(5):
             x1_z = max(0, rx + i * zone_w)
@@ -486,7 +488,8 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
                 crop_z = table_img[y1:y2, x1_z:x2_z]
                 if crop_z.size > 0:
                     gray_z = cv2.cvtColor(crop_z, cv2.COLOR_BGR2GRAY)
-                    if int(gray_z.max()) >= 180:
+                    bright_thresh = 160 if i == 4 else 180
+                    if int(gray_z.max()) >= bright_thresh:
                         community_zone_count += 1
                     else:
                         break
