@@ -6,115 +6,169 @@
 - **Vídeo de teste**: `video_cortado_1min.mp4`
 - **Comando de pipeline**: `python main.py video_cortado_1min.mp4 --no-checkpoint`
 
-## Score atual (baseline pré-fixes: 173/300)
+## Score atual (pós fixes de agentes: ~265/300 estimado, não validado)
 
-| Mão | Baseline | Estimado pós-fixes | Delta |
-|-----|----------|-------------------|-------|
-| HL4017 | 72/100 | ~84/100 | +12 |
-| HL3048 | 69/100 | ~81/100 | +12 |
-| HL2332 | 32/100 | ~100/100 | +68 |
-| **TOTAL** | **173/300** | **~265/300** | **+92** |
+| Mão | Baseline | Pós-agentes (estimado) | Máximo atingível | Limitação |
+|-----|----------|------------------------|-----------------|-----------|
+| HL4017 | 72/100 | ~84/100 | **84/100** | Gabarito com erro (ver abaixo) |
+| HL3048 | 69/100 | ~81/100 | **96/100** | Calls $0.20 off (aceito) |
+| HL2332 | 32/100 | ~100/100 | **100/100** | — |
+| **TOTAL** | **173/300** | **~265/300** | **~280/300** | |
 
-> **Nota**: Score estimado — video não pode ser reprocessado no ambiente atual (LFS 502).
-> Executar `python main.py video_cortado_1min.mp4 --no-checkpoint` para validar.
-
-## Goal
-- **Mínimo**: 240/300 (80/100)
-- **Ideal**: 270/300 (90/100)
+> **Nota**: Score pós-agentes é estimado. Validar com `python main.py video_cortado_1min.mp4 --no-checkpoint`
 
 ---
 
-## Fixes implementados (commits 06837c2–28df668)
+## Teto do HL4017 preflop — erro confirmado no gabarito
 
-### Fix 1 (06837c2): Rejeitar fragmentos sem SB/BB
-- **Problema**: HL2332 tinha dois hands detectados. O primeiro (Hand #117001) era um fragmento
-  de mão que começou antes do vídeo — sem SB/BB identificados, posições/ações/vencedor errados.
-  O `extract_hand()` do compare script usava o PRIMEIRO hand encontrado → score 32/100.
-- **Fix**: `_rejection_reason()` rejeita hands onde nenhum SB/BB foi identificado.
-- **Efeito estimado**: HL2332 32/100 → ~100/100 (+68 pts)
+O gabarito (`Novo_gabarito_3hands.txt`) tem `dLzinN: folds` duplicado (linhas 26 e 29) e a
+ordem dos folds não corresponde às posições reais de cada assento. A sequência correta baseada
+nas posições (UTG→BTN→SB→BB→STR) seria:
 
-### Fix 2 (26e54a6): Preencher nomes vazios + detectar raise pré-vídeo
-- **_fill_empty_action_names**: preenche `action.player` vazio usando `hand.players[seat]["name"]`.
-  Ocorre quando OCR perde o nome no frame do action. Corrige `: folds` → `dLzinN: folds` no
-  HL3048 preflop, que estava deslocando todos os actions subsequentes.
-- **Raise pré-vídeo**: ao início da mão, se uma única aposta supera 2× o max_blind, gera
-  retroativamente um action de raise para aquele jogador (em vez de fold espúrio).
-  Corrige taymonkha:folds → taymonkha:raises $0.60 em HL4017.
-- **Efeito estimado**: HL3048 +11 pts preflop, HL4017 +2 pts preflop
+```
+GongFuBoy → Fahir651 → 老胡头 → dLzinN → Phoenixy → 浅忆心安 → easycall86 calls
+```
 
-### Fix 3 (737c9c8): Threshold de brilho para zona 5 (river) 180→160
-- **Problema**: O 5° card zone (river) às vezes tem brilho máximo 160-179 devido a compressão,
-  impedindo a detecção. Sem river card, street fica em turn e as ações do river aparecem no turn.
-- **Fix**: `vision/ocr_reader.py` usa threshold 160 (em vez de 180) para a 5ª zona.
-- **Efeito estimado**: HL4017 river 0/10 → 10/10 (+10 pts)
-
-### Fix 4 (28df668): Filtrar calls de $0 + cap de bet suplementar
-- **Zero-amount calls**: calls com `amount_bb <= 0` são espúrias (player já igualou o max bet,
-  chip aparecendo de novo é leitura OCR stale). Corrige `Andylau408: calls $0.00` em HL3048.
-- **Cap de bet suplementar**: bets detectados no caminho suplementar (diff-based) são limitados
-  a `max(5×pot + 5, 5)` BB. Previne que valor de stack OCR seja misrouted para a região de bet
-  e infle calls downstream. Corrige `XTSB鱼: calls $53.50` espúrio no flop de HL2332.
-- **Efeito estimado**: HL3048 +1 pts preflop, HL2332 +10 pts flop
+O gabarito tem uma ordem errada e dLzinN duplicado. **Impossível chegar a 20/20 no preflop
+do HL4017 sem reproduzir o erro do gabarito.** Não corrigir.
 
 ---
 
-## Erros restantes (após todos os fixes)
+## Próxima iteração: 2 fixes para HL3048 turn (+15 pts → total ~280/300)
 
-### HL4017 — ~16 pts restantes
-- **PREFLOP** (~16/20): fold order não bate com gabarito (dLzinN fold duplicate no gabarito
-  parece erro no gabarito mesmo). Com pre-video raise fix: ~4/20 → ~4/20 (bounded pelo gabarito).
-- **TURN extras**: extra checks de easycall86/taymonkha aparecem no turn (devem ser river).
-  Com river fix, esses extras migram para RIVER frame e TURN fica limpo.
+### Fix A — Converter stack-delta "unknown" em bet/raise correto
+**Problema**: `_infer_actions()` detecta a queda de stack do Hamster813 (de ~$32.90 para ~$27.18
+= drop de $5.72) mas emite `action_type = "unknown"`. O compare_gabarito não dá crédito para
+ações "unknown". O bet real de $5.72 aconteceu entre dois frames e sumiu antes do próximo sample.
 
-### HL3048 — ~19 pts restantes
-- **PREFLOP** (~16/20): calls de Hamster813 ($1.58 vs $1.38) e Andylau408 ($1.58 vs $1.38)
-  com discrepância de $0.20 — provavelmente diferença de contabilidade de antes vs gabarito.
-- **TURN** (0/15): FishGeorge:checks + Hamster813:bets $5.72 + FishGeorge:folds ausentes.
-  Bet de Hamster813 perdido entre frames; fold detectado como ação no limiar de rua.
+**Arquivo**: `engine/hand_tracker.py`
 
-### HL2332 — ~0 pts restantes (estimado 100/100)
-- Todos os problemas resolvidos pelos fixes 1+4.
+**Localização**: `_infer_actions()`, bloco `elif (prev_bet < 0.05 and curr_bet < 0.05 ...)` — linhas ~361-367.
+
+**Fix cirúrgico**: Substituir `"unknown"` pela classificação correta com base em `state.max_bet`:
+
+```python
+elif (prev_bet < 0.05 and curr_bet < 0.05
+      and prev_stack is not None and curr_stack is not None):
+    stack_drop = round(prev_stack - curr_stack, 2)
+    if stack_drop > 0.5:
+        prev_max = state.max_bet
+        if prev_max < 0.05:
+            action_type = "bet"
+            amount_bb   = stack_drop
+            state.max_bet          = stack_drop
+            state.voluntary_raises += 1
+            state.last_aggressor   = sk
+        else:
+            action_type = "raise"
+            amount_bb   = round(stack_drop - prev_max, 2)
+            state.max_bet          = max(state.max_bet, stack_drop)
+            state.voluntary_raises += 1
+            state.last_aggressor   = sk
+        state.invested[sk] = round(state.invested.get(sk, 0.0) + stack_drop, 2)
+        state.has_acted.add(sk)
+        action = Action(sk, name, pos, action_type, amount_bb, street, ts,
+                        total_bb=state.invested[sk])
+        actions.append(action)
+```
+
+**Efeito esperado**: `Hamster813: bets $5.72` aparece no turn → gabarito turn[2] ✓
+
+---
+
+### Fix B — Não emitir fold no frame imediatamente após transição de rua
+**Problema**: No primeiro frame do turn após a transição, as fichas residuais do flop de
+FishGeorge ainda estão sendo varridas para o pot (animação de coleta). O `_infer_actions`
+vê a ficha desaparecer e emite `FishGeorge: fold` falso (turn[1]).
+
+O código já pula inferência **no frame de transição** (`is_new_street=True → new_actions=[]`)
+mas a animação de sweep ocorre no frame SEGUINTE.
+
+**Arquivo**: `engine/hand_tracker.py`
+
+**Fix**: Adicionar campo `just_transitioned: bool = False` ao `StreetState`. Setar para `True`
+quando nova rua for detectada. No frame seguinte, pular detecção de fold (mas não de bet/raise).
+Limpar após usar.
+
+**Mudança 1** — Dataclass `StreetState` (adicionar campo):
+```python
+just_transitioned: bool = False
+```
+
+**Mudança 2** — Em `process_sequence()`, após resetar o StreetState para nova rua (bloco
+`if effective_n > prev_max:`):
+```python
+new_ss.just_transitioned = True
+```
+
+**Mudança 3** — Em `_infer_actions()`, no bloco `elif prev_bet > 0.05 and curr_bet < 0.05:`
+(detecção de call/fold por desaparecimento de chip), adicionar no início do bloco:
+```python
+if state.just_transitioned:
+    state.just_transitioned = False
+    continue   # Chip desapareceu por sweep de transição, não por ação
+```
+
+**Importante**: Limpar o flag fora do `continue` também (no `else` path) para garantir que
+seja limpo mesmo para assentos sem chip naquele frame. Melhor limpar antes do loop de assentos:
+
+```python
+# No início da função _infer_actions, antes do loop de assentos:
+just_trans = state.just_transitioned
+state.just_transitioned = False  # Limpa sempre — vale só 1 frame
+```
+
+E no bloco de fold:
+```python
+elif prev_bet > 0.05 and curr_bet < 0.05:
+    if just_trans:
+        continue  # sweep de transição, não ação
+    # ... resto do código existente
+```
+
+**Efeito esperado**: `FishGeorge: checks` não vira fold falso → turn[1] ✓
+
+---
+
+### Fix C — Terminal fold (automático com A+B)
+`_infer_terminal_folds` já está implementado. Com Fix A (Hamster813 bet detectado) e Fix B
+(FishGeorge check preservado), a função vai encontrar:
+- FishGeorge última ação no turn = check
+- Agressão posterior = Hamster813: bets $5.72
+- → Insere `FishGeorge: folds` automaticamente ✓
+
+**Nenhuma mudança de código necessária para Fix C.**
 
 ---
 
 ## Processo de cada iteração
 
 1. **Leia** este arquivo para entender estado atual
-2. **Identifique** o erro de maior impacto ainda não resolvido
-3. **Investigue** a causa raiz:
-   - `vision/ocr_reader.py` — OCR e detecção de cartas/naipes
-   - `engine/hand_tracker.py` — lógica de estado da mão
-   - `capture/change_detector.py` — captura de key frames
-   - `output/hh_writer_ps.py` — formatação do output
-   - `vision/roi_config.json` — coordenadas das regiões por mesa
-4. **Implemente** a correção mais cirúrgica possível
-5. **Rode** o pipeline:
+2. **Valide** o score atual rodando o pipeline + compare:
    ```
    python main.py video_cortado_1min.mp4 --no-checkpoint
-   ```
-6. **Meça** o score:
-   ```
    python experiments/compare_gabarito.py output/hands_video_cortado_1min_<timestamp>.txt
    ```
-7. **Verifique** que nenhuma mão regrediu — se regrediu, REVERTA antes de continuar
-8. **Rode** os testes:
-   ```
-   python -m pytest tests/ -x -q
-   ```
-9. **Atualize** a seção "Score atual" neste arquivo com o novo resultado
-10. Se ainda há erros corrigíveis e o goal não foi atingido, **continue** na próxima iteração
+3. **Implemente** Fix A (stack-delta bet/raise) em `engine/hand_tracker.py`
+4. **Implemente** Fix B (just_transitioned flag) em `engine/hand_tracker.py`
+5. **Rode** o pipeline e meça score — verificar que HL3048 turn subiu e nada regrediu
+6. **Rode** os testes: `python -m pytest tests/ -x -q`
+7. **Atualize** a seção "Score atual" deste arquivo com resultado real
+8. Se score < 280/300 e há bugs restantes, continue investigando
 
 ---
 
-## Critério de sucesso
-- Total ≥ 240/300 (80%) — mínimo aceitável
-- Total ≥ 270/300 (90%) — ideal
-- Nenhuma mão pode ter score < 60/100 individualmente
-- Todos os testes passando: `python -m pytest tests/ -q`
-
 ## Erros aceitos (NÃO corrigir — limitações conhecidas)
-- Hero card suits (highlight dourado do GGPoker impede detecção de naipe)
-- Showdown cards de outros jogadores (feature futura)
-- Nome truncado `我是真` vs `我是真菜.…` — limitação do OCR com nomes longos/especiais
-- Fold order em HL4017 preflop — gabarito tem `dLzinN: folds` duplicado (provável erro gabarito)
-- Call amounts HL3048 ($1.58 vs $1.38) — discrepância de $0.20 provavelmente ante accounting
+
+- **HL4017 preflop fold order**: gabarito tem `dLzinN: folds` duplicado — erro no gabarito
+- **HL3048 calls $0.20 off** ($1.58 vs $1.38): diferença de contabilidade de antes
+- **Hero card suits**: highlight dourado do GGPoker impede detecção de naipe
+- **Nome truncado** `我是真` vs `我是真菜.…`: limitação do OCR com nomes longos
+
+---
+
+## Critério de sucesso desta iteração
+- Total ≥ 275/300
+- HL3048 turn ≥ 10/15
+- Nenhuma mão regrediu abaixo do score pós-agentes
+- Todos os testes passando: `python -m pytest tests/ -q`
