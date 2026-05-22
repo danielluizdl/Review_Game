@@ -95,7 +95,7 @@ class TestBBToCurrencyConversion(unittest.TestCase):
     def test_header_has_correct_stakes(self):
         h = _make_hand(blinds="0.05/0.1/0.2(0.05)", n_players=4)
         output = _hand_to_ps(h)
-        self.assertIn("($0.05/$0.10/$0.20)", output)
+        self.assertIn("($0.05/$0.10/$0.20(0.05))", output)
 
 
 class TestSingleHandBasic(unittest.TestCase):
@@ -215,17 +215,17 @@ class TestEmptyStreetsOmitted(unittest.TestCase):
 class TestRaiseToCalculation(unittest.TestCase):
 
     def test_raise_to_amount(self):
-        # Alice bets 6BB, then raises another 30BB (total 36BB committed)
+        # Alice bets 6BB, then raises to 36BB total (increment=30BB)
         # At bb=$0.10: bet=$0.60, raise=$3.00, to=$3.60
         h = _make_hand(blinds="0.05/0.1/0.2(0.05)", n_players=4, winner="Alice")
         h.actions = [
-            Action("seat_1", "Alice", "BTN", "bet",   6.0,  "preflop", 3.0),
-            Action("seat_2", "Bob",   "SB",  "raise", 18.0, "preflop", 4.0),
-            Action("seat_1", "Alice", "BTN", "raise", 30.0, "preflop", 5.0),
+            Action("seat_1", "Alice", "BTN", "bet",   6.0,  "preflop", 3.0, total_bb=6.0),
+            Action("seat_2", "Bob",   "SB",  "raise", 12.0, "preflop", 4.0, total_bb=18.0),
+            Action("seat_1", "Alice", "BTN", "raise", 18.0, "preflop", 5.0, total_bb=36.0),
         ]
         output = _hand_to_ps(h)
-        # Alice's second action: prev committed=$0.60, raise $3.00 → to $3.60
-        self.assertIn("Alice: raises $3.00 to $3.60", output)
+        # Alice's re-raise: increment $1.80, total $3.60
+        self.assertIn("Alice: raises $1.80 to $3.60", output)
 
     def test_first_bet_uses_bets_keyword(self):
         h = _make_hand(blinds="0.05/0.1/0.2(0.05)", n_players=4)
@@ -297,7 +297,8 @@ class TestPlaceholderSuitsNoCollision(unittest.TestCase):
 
 class TestHeroNameInActionLines(unittest.TestCase):
 
-    def test_hero_name_replaced_by_Hero_in_actions(self):
+    def test_hero_real_name_used_in_actions(self):
+        # Actions use the real player name (not "Hero") so compare scripts can match names
         h = _make_hand(hero_cards=["A", "K"])
         h.hero_seat = "seat_1"   # Alice é o hero
         h.actions = [
@@ -305,8 +306,7 @@ class TestHeroNameInActionLines(unittest.TestCase):
             Action("seat_2", "Bob",   "SB",  "fold", 0.0, "preflop", 3.0),
         ]
         output = _hand_to_ps(h)
-        self.assertIn("Hero: folds", output)
-        self.assertNotIn("Alice: folds", output)
+        self.assertIn("Alice: folds", output)
         self.assertIn("Bob: folds", output)
 
     def test_no_hero_substitution_without_hero_seat(self):

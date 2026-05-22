@@ -18,7 +18,8 @@ TABLE_KEYS = ["top_left", "top_right", "bottom_left", "bottom_right"]
 # Valores aproximados — calibrar com calibrate.py após confirmar no vídeo real
 REGIONS = {
     "title":     (0,   0,  600, 30),   # título da janela: "HL5798 - 0.05/0.1 - NLHE"
-    "pot":       (180, 155, 300, 35),  # "Pote Total: X BB"
+    "pot_total": (180, 155, 300, 35),  # "Pote Total: X BB" — pot acumulado durante a mão
+    "pot_ante":  (180, 155, 300, 35),  # pot no frame de antes (antes dos blinds)
 
     # 8 assentos: (x, y, w, h) da área de nome+stack de cada jogador
     "seat_1":    (260, 55,  180, 45),  # topo centro-esquerda
@@ -54,6 +55,16 @@ REGIONS = {
     "cards_seat_6": (370, 380, 80, 45),
     "cards_seat_7": (80,  310, 80, 45),
     "cards_seat_8": (20,  150, 80, 45),
+
+    # Botão dealer (D) próximo a cada assento — calibrar posição exata
+    "dealer_seat_1": (300,  85,  50, 25),
+    "dealer_seat_2": (395,  60,  50, 25),
+    "dealer_seat_3": (545,  85,  50, 25),
+    "dealer_seat_4": (645, 165,  50, 25),
+    "dealer_seat_5": (580, 270,  50, 25),
+    "dealer_seat_6": (395, 345,  50, 25),
+    "dealer_seat_7": (110, 270,  50, 25),
+    "dealer_seat_8": ( 55, 165,  50, 25),
 
     # Label "Winner." exibido junto ao seat vencedor ao fim de cada mão.
     # Coordenadas placeholder — calibrar com calibrate_interactive.py.

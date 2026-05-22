@@ -26,6 +26,9 @@ output/*.json
 # Sessão do Claude
 .claude/
 
+# Notas temporárias de sessão
+_session_notes/
+
 # IDEs
 .vscode/
 .idea/

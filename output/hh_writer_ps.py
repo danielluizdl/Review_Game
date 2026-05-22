@@ -23,7 +23,7 @@ def _assign_placeholder_suits(cards: list[str],
                                used: set[str] | None = None) -> list[str]:
     """
     Atribui suits ciclicamente aos ranks, evitando combinações rank+suit repetidas.
-    PLACEHOLDER — detecção real de suit via OCR é trabalho futuro.
+    Cards que já possuem suit real (len>=2 e card[1] in 'hdcs') são mantidas.
     'used' deve ser compartilhado ao longo de todo o board de uma mão para
     evitar colisões entre flop/turn/river.
     """
@@ -31,15 +31,22 @@ def _assign_placeholder_suits(cards: list[str],
         used = set()
     result: list[str] = []
     suit_idx = 0
-    for rank in cards:
+    for card in cards:
+        rank = card[0] if card else "?"
+        # Card already has real suit from color detection — keep it
+        if len(card) >= 2 and card[1] in "hdcs":
+            used.add(card)
+            result.append(card)
+            continue
+        # Assign placeholder suit cyclically
         placed = False
         for _ in range(4):
             suit = _SUIT_CYCLE[suit_idx % 4]
             suit_idx += 1
-            card = f"{rank}{suit}"
-            if card not in used:
-                used.add(card)
-                result.append(card)
+            candidate = f"{rank}{suit}"
+            if candidate not in used:
+                used.add(candidate)
+                result.append(candidate)
                 placed = True
                 break
         if not placed:
@@ -92,12 +99,17 @@ def parse_blinds(blinds_str: str) -> dict:
 # ── helpers internos ──────────────────────────────────────────────────────────
 
 def _get_street_cards(frames: list) -> list[str]:
-    """Últimas community_cards não-vazias de uma rua."""
-    for frame in reversed(frames):
+    """Community_cards com mais cartas; em empate, prefere o último frame (pós-animação)."""
+    best: list[str] = []
+    best_suits = 0
+    for frame in frames:
         cards = frame.get("community_cards", [])
-        if cards:
-            return list(cards)
-    return []
+        n_suits = sum(1 for c in cards if len(c) >= 2 and c[1] in "hdcs")
+        # >= instead of >: last frame with same card count wins, avoiding animation frames
+        if len(cards) > len(best) or (len(cards) == len(best) and n_suits >= best_suits):
+            best = list(cards)
+            best_suits = n_suits
+    return best
 
 
 def _seat_num(sk: str) -> int:
@@ -118,15 +130,9 @@ def _seat_role(sk: str, h: Hand) -> str:
 
 
 def _format_action(action: Action, bb_value: float,
-                   currency: str, committed: dict,
-                   hero_name: str = "") -> str:
-    """
-    Formata uma Action para o texto PokerStars.
-    'committed' acumula o total apostado pelo jogador na rua corrente
-    para calcular corretamente o 'to' nas linhas de raise.
-    Se hero_name for fornecido, substitui o nome do hero por "Hero".
-    """
-    player = "Hero" if hero_name and action.player == hero_name else action.player
+                   currency: str, hero_seat: str = "") -> str:
+    """Formata uma Action para o texto PokerStars."""
+    player = action.player
     amt    = round(action.amount_bb * bb_value, 2)
     act    = action.action
 
@@ -135,16 +141,12 @@ def _format_action(action: Action, bb_value: float,
     if act == "check":
         return f"{player}: checks"
     if act in ("call", "unknown"):
-        committed[player] = round(committed.get(player, 0.0) + amt, 2)
         return f"{player}: calls {currency}{amt:.2f}"
     if act == "bet":
-        committed[player] = round(committed.get(player, 0.0) + amt, 2)
         return f"{player}: bets {currency}{amt:.2f}"
     if act == "raise":
-        prev      = committed.get(player, 0.0)
-        new_total = round(prev + amt, 2)
-        committed[player] = new_total
-        return f"{player}: raises {currency}{amt:.2f} to {currency}{new_total:.2f}"
+        to_amt = round(action.total_bb * bb_value, 2)
+        return f"{player}: raises {currency}{amt:.2f} to {currency}{to_amt:.2f}"
     return ""
 
 
@@ -169,12 +171,13 @@ def _hand_to_ps(h: Hand) -> str:
     today  = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     ts_str = (today + timedelta(seconds=h.start_ts)).strftime("%Y/%m/%d %H:%M:%S")
 
-    # Stakes no header
+    # Stakes no header — formato GGPoker: ($SB/$BB/$STR(ante))
+    ante_str = f"({ante:.2f})" if ante else ""
     if str_val:
         stakes = (f"({currency}{sb:.2f}/{currency}{bb:.2f}"
-                  f"/{currency}{str_val:.2f})")
+                  f"/{currency}{str_val:.2f}{ante_str})")
     else:
-        stakes = f"({currency}{sb:.2f}/{currency}{bb:.2f})"
+        stakes = f"({currency}{sb:.2f}/{currency}{bb:.2f}{ante_str})"
 
     # Assentos ocupados ordenados pelo número
     seat_items = sorted(
@@ -230,7 +233,7 @@ def _hand_to_ps(h: Hand) -> str:
     if h.hero_cards:
         used_hero: set[str] = set()
         hero_suited = _assign_placeholder_suits(h.hero_cards, used_hero)
-        lines.append(f"Dealt to Hero [{' '.join(hero_suited)}]")
+        lines.append(f"Dealt to {hero_name or 'Hero'} [{' '.join(hero_suited)}]")
 
     # ── cartas comunitárias com suits placeholder ─────────────────────────────
     used_board: set[str] = set()
@@ -261,9 +264,8 @@ def _hand_to_ps(h: Hand) -> str:
 
     # ── ações por rua ─────────────────────────────────────────────────────────
     def _emit_actions(street_name: str) -> None:
-        committed: dict[str, float] = {}
         for action in (a for a in h.actions if a.street == street_name):
-            line = _format_action(action, bb, currency, committed, hero_name)
+            line = _format_action(action, bb, currency, hero_seat)
             if line:
                 lines.append(line)
 
@@ -286,15 +288,55 @@ def _hand_to_ps(h: Hand) -> str:
         )
         _emit_actions("river")
 
-    # ── showdown ──────────────────────────────────────────────────────────────
-    if winner and winner != "split" and h.hero_cards:
-        used_sd: set[str] = set()
-        hero_sd = _assign_placeholder_suits(h.hero_cards, used_sd)
-        lines.append("*** SHOW DOWN ***")
-        lines.append(f"Hero: shows [{' '.join(hero_sd)}] (a hand)")
+    # ── uncalled bet + winner collect ─────────────────────────────────────────
+    uncalled_amt = 0.0
+    if h.actions:
+        last_agg = next(
+            (a for a in reversed(h.actions) if a.action in ("bet", "raise")),
+            None,
+        )
+        if last_agg:
+            agg_idx = h.actions.index(last_agg)
+            called = any(
+                a.action in ("call", "allin")
+                for a in h.actions[agg_idx + 1:]
+                if a.seat != last_agg.seat
+            )
+            if not called:
+                ubet = round(last_agg.amount_bb * bb, 2)
+                if ubet > 0.01:
+                    uncalled_amt = ubet
+                    lines.append(
+                        f"Uncalled bet ({currency}{uncalled_amt:.2f})"
+                        f" returned to {last_agg.player}"
+                    )
+
+    pot_total = round(h.pot_peak * bb, 2)
+    pot_real  = round(pot_total - uncalled_amt, 2)
+
+    if winner and winner != "split":
+        lines.append(f"{winner} collected {currency}{pot_real:.2f} from pot")
+
+    # ── showdown / doesn't show ───────────────────────────────────────────────
+    # Showdown: river was played AND nobody folded on the river
+    river_folds = [a for a in h.actions if a.action == "fold" and a.street == "river"]
+    at_showdown = bool(river_suited) and not river_folds
+
+    if winner and winner != "split":
+        if at_showdown:
+            lines.append("*** SHOW DOWN ***")
+            if h.hero_cards and winner == hero_name:
+                used_sd: set[str] = set()
+                hero_sd = _assign_placeholder_suits(h.hero_cards, used_sd)
+                lines.append(f"{hero_name}: shows [{' '.join(hero_sd)}] (a hand)")
+            # Non-hero cards at showdown are not detected (accepted limitation)
+        else:
+            if winner != hero_name:
+                lines.append(f"{winner}: doesn't show hand")
+            elif h.hero_cards:
+                lines.append(f"{hero_name}: doesn't show hand")
 
     # ── summary ───────────────────────────────────────────────────────────────
-    pot_real = round(h.pot_peak * bb, 2)
     lines.append("*** SUMMARY ***")
     lines.append(f"Total pot {currency}{pot_real:.2f} | Rake {currency}0.00")
 
@@ -315,8 +357,15 @@ def _hand_to_ps(h: Hand) -> str:
             folds = [a for a in h.actions if a.player == name and a.action == "fold"]
             if folds:
                 s = folds[0].street
-                outcome = ("folded before Flop" if s == "preflop"
-                           else f"folded on the {s.capitalize()}")
+                if s == "preflop":
+                    voluntary = any(
+                        a.player == name and a.action in ("bet", "raise", "call", "allin")
+                        for a in h.actions if a.street == "preflop"
+                    )
+                    suffix  = "" if voluntary else " (didn't bet)"
+                    outcome = f"folded before Flop{suffix}"
+                else:
+                    outcome = f"folded on the {s.capitalize()}"
             else:
                 outcome = "folded"
 

@@ -88,6 +88,7 @@ def _serialize_action(a) -> dict:
         "position":  a.position,
         "action":    a.action,
         "amount_bb": a.amount_bb,
+        "total_bb":  a.total_bb,
         "street":    a.street,
         "ts":        a.ts,
     }

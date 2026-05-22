@@ -6,8 +6,13 @@ Uso: python main.py <video.mp4> [--no-checkpoint]
 """
 import os
 import sys
+import io
 import cv2
 import json
+
+# Força UTF-8 no terminal do Windows para suportar nomes com caracteres asiáticos
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True)
 from pathlib import Path
 
 CONFIG_PATH = "vision/roi_config.json"
@@ -59,7 +64,7 @@ def _process_video(video_path, cfg, use_checkpoint=True):
     output_dir      = "key_frames"
     checkpoint_path = os.path.join("output", f".checkpoint_{Path(video_path).stem}.json")
 
-    key_frames = extract_key_frames(video_path, output_dir=output_dir)
+    key_frames = extract_key_frames(video_path, output_dir=output_dir, cfg=cfg)
     if not key_frames:
         print("Nenhuma mudança detectada no vídeo.")
         return
@@ -112,7 +117,7 @@ def _process_video(video_path, cfg, use_checkpoint=True):
         line = f"[{i}/{len(key_frames)}] t={kf['timestamp']:.1f}s  "
         for tk, data in frame_results.items():
             marker = "" if data["_from_cache"] else "*"
-            line += f"{marker}{tk[:2].upper()}→{data['table_id']} pot={data['pot']}  "
+            line += f"{marker}{tk[:2].upper()}->{data['table_id']} pot={data['pot']}  "
         print(line)
 
         # Checkpoint periódico
