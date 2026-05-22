@@ -101,6 +101,8 @@ def _make_hand(n_frames=3, duration=30.0, pot_peak=10.0, n_named=2):
             "stack_start": 200.0,
             "stack_end": 200.0,
         }
+    # Provide minimal positions so the SB/BB validation passes
+    h.positions = {"seat_1": "BTN", "seat_2": "SB", "seat_3": "BB"}
     frames_per_street = max(0, n_frames)
     h.streets["preflop"] = [{"ts": i, "pot": pot_peak} for i in range(frames_per_street)]
     return h

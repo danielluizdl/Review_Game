@@ -1042,6 +1042,10 @@ def _rejection_reason(h: Hand) -> str:
     total_frames = sum(len(f) for f in h.streets.values())
     if total_frames < 2:
         return "apenas 1 frame capturado — dados insuficientes"
+    # Reject hands where blind positions couldn't be identified — almost certainly a
+    # mid-hand fragment from before the video start (blind-posting was never captured).
+    if not any(p in h.positions.values() for p in ("SB", "BB")):
+        return "SB/BB não identificados — fragmento de mão (início fora do vídeo)"
     return ""
 
 
