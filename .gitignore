@@ -9,6 +9,7 @@ __pycache__/
 
 # Vídeos e imagens de calibração (arquivos pesados)
 *.mp4
+!video_cortado_1min.mp4
 *.avi
 *.mkv
 *.mov
