@@ -77,7 +77,7 @@ GongFuBoy: posts small blind $0.05
 你懂个嗨: posts big blind $0.10
 Andylau408: posts straddle $0.20
 *** HOLE CARDS ***
-Dealt to dLzinN [2h 6d]
+Dealt to dLzinN [2c 6s]
 FishGeorge: calls $0.20
 dLzinN: folds
 Hamster813: raises $0.55 to $0.75
