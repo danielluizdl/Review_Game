@@ -61,7 +61,7 @@ def _process_video(video_path, cfg, use_checkpoint=True):
     from output.json_writer import write_hands
     from output.hh_writer_ps import write_hands_ps
 
-    output_dir      = "key_frames"
+    output_dir      = os.path.join("key_frames", Path(video_path).stem)
     checkpoint_path = os.path.join("output", f".checkpoint_{Path(video_path).stem}.json")
 
     key_frames = extract_key_frames(video_path, output_dir=output_dir, cfg=cfg)

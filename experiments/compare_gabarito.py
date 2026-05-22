@@ -1,20 +1,33 @@
 """
-Compara a saída do pipeline com o gabarito para a mão 1 da mesa HL3048.
+Compara a saída do pipeline com o gabarito para as 3 mãos de referência.
 
+Gabarito: Novo_gabarito_3hands.txt  (HL4017, HL3048, HL2332)
 Uso:
   python compare_gabarito.py [arquivo_output.txt]
 
 Se nenhum arquivo for passado, usa o .txt mais recente em output/.
+
+Pontuação por mão (total 100 pts):
+  20 - Jogadores nos assentos
+  10 - Posições BTN/SB/BB/STR
+  20 - Ações preflop
+  15 - Ações flop
+  15 - Ações turn
+  10 - Ações river  (auto-máx se gabarito não tem river)
+  10 - Vencedor
+Total geral: 300 pts (3 × 100)
 """
 import re
 import sys
 import glob
 import os
-from pathlib import Path
 
 # Força saída UTF-8 no Windows
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+GABARITO_PATH = os.path.join(os.path.dirname(__file__), "..", "Novo_gabarito_3hands.txt")
+HANDS_TO_COMPARE = ["HL4017", "HL3048", "HL2332"]
 
 
 # ── parser de hand history PokerStars ─────────────────────────────────────────
@@ -25,10 +38,10 @@ def parse_hand(block: str) -> dict:
     h = {
         "table_id":   "",
         "btn_seat":   0,
-        "seats":      {},   # seat_num → {name, stack}
-        "positions":  {},   # name → position
+        "seats":      {},
+        "positions":  {},
         "antes":      [],
-        "blinds":     [],   # [{name, type, amount}]
+        "blinds":     [],
         "hole_cards": [],
         "actions":    {"preflop": [], "flop": [], "turn": [], "river": []},
         "board":      [],
@@ -39,40 +52,34 @@ def parse_hand(block: str) -> dict:
     street = "preflop"
 
     for line in lines:
-        # Header
         m = re.match(r"Table '(\w+)'.*Seat #(\d+) is the button", line)
         if m:
             h["table_id"] = m.group(1)
             h["btn_seat"] = int(m.group(2))
             continue
 
-        # Seats
         m = re.match(r"Seat (\d+): (.+?) \(\$?([\d.]+) in chips\)", line)
         if m:
             h["seats"][int(m.group(1))] = {"name": m.group(2).strip(),
                                             "stack": float(m.group(3))}
             continue
 
-        # Antes
         m = re.match(r"(.+?): posts the ante \$?([\d.]+)", line)
         if m:
             h["antes"].append({"name": m.group(1), "amount": float(m.group(2))})
             continue
 
-        # Blinds
         m = re.match(r"(.+?): posts (small blind|big blind|straddle) \$?([\d.]+)", line)
         if m:
             h["blinds"].append({"name": m.group(1), "type": m.group(2),
                                 "amount": float(m.group(3))})
             continue
 
-        # Hole cards
-        m = re.match(r"Dealt to (\w+) \[(.+?)\]", line)
+        m = re.match(r"Dealt to (\S+) \[(.+?)\]", line)
         if m:
             h["hole_cards"] = m.group(2).split()
             continue
 
-        # Street headers
         if line.startswith("*** HOLE CARDS ***"):
             street = "preflop"
             continue
@@ -95,10 +102,9 @@ def parse_hand(block: str) -> dict:
             street = "summary"
             continue
         if line.startswith("*** SHOW DOWN ***"):
+            street = "showdown"
             continue
 
-        # Winner — dois formatos: standalone "Name collected $X from pot"
-        # e summary "Seat N: Name collected ($X)"
         m = re.match(r"(\S+) collected \$?([\d.]+) from pot", line)
         if m:
             h["winner"] = m.group(1)
@@ -110,7 +116,6 @@ def parse_hand(block: str) -> dict:
             h["pot"]    = float(m.group(2))
             continue
 
-        # Summary positions
         if street == "summary":
             m = re.match(r"Seat \d+: (.+?) \((.+?)\)", line)
             if m:
@@ -126,9 +131,11 @@ def parse_hand(block: str) -> dict:
                     h["positions"][name] = "STR"
             continue
 
-        # Actions (fold/check/call/bet/raise/raises)
         if street in h["actions"]:
-            m = re.match(r"(.+?): (folds|checks|calls \$[\d.]+|bets \$[\d.]+|raises \$[\d.]+ to \$[\d.]+)", line)
+            m = re.match(
+                r"(.+?): (folds|checks|calls \$[\d.]+|bets \$[\d.]+|raises \$[\d.]+ to \$[\d.]+)",
+                line,
+            )
             if m:
                 h["actions"][street].append({
                     "player": m.group(1).strip(),
@@ -136,10 +143,8 @@ def parse_hand(block: str) -> dict:
                 })
                 continue
 
-    # Infere posições dos blinds se summary não populou
     for b in h["blinds"]:
-        name = b["name"]
-        btype = b["type"]
+        name, btype = b["name"], b["type"]
         if name not in h["positions"]:
             if btype == "small blind":
                 h["positions"][name] = "SB"
@@ -147,7 +152,6 @@ def parse_hand(block: str) -> dict:
                 h["positions"][name] = "BB"
             elif btype == "straddle":
                 h["positions"][name] = "STR"
-    # BTN do header
     for sn, sinfo in h["seats"].items():
         if sn == h["btn_seat"]:
             h["positions"][sinfo["name"]] = "BTN"
@@ -155,14 +159,13 @@ def parse_hand(block: str) -> dict:
     return h
 
 
-def extract_hand_HL3048(txt_path: str) -> str | None:
-    """Extrai o primeiro bloco de mão da mesa HL3048 do arquivo de output."""
+def extract_hand(table_id: str, txt_path: str) -> str | None:
+    """Extrai o primeiro bloco de mão de uma mesa específica do arquivo."""
     with open(txt_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
-
     blocks = re.split(r"(?=PokerStars Hand #)", content)
     for block in blocks:
-        if "HL3048" in block and block.strip():
+        if table_id in block and block.strip():
             return block.strip()
     return None
 
@@ -170,7 +173,6 @@ def extract_hand_HL3048(txt_path: str) -> str | None:
 # ── comparação e scoring ──────────────────────────────────────────────────────
 
 def _normalize_action(raw: str) -> tuple[str, float]:
-    """Retorna (tipo, valor) de uma string de ação."""
     raw = raw.strip().lower()
     if raw == "folds":
         return ("fold", 0.0)
@@ -189,7 +191,6 @@ def _normalize_action(raw: str) -> tuple[str, float]:
 
 
 def _name_match(a: str, b: str) -> bool:
-    """Comparação tolerante de nomes (OCR pode cortar/trocar chars)."""
     a, b = a.strip().lower(), b.strip().lower()
     if a == b:
         return True
@@ -198,88 +199,12 @@ def _name_match(a: str, b: str) -> bool:
     return False
 
 
-def compare(gabarito: dict, output: dict) -> dict:
-    """Compara dois parsed-hands e retorna {score, max_score, issues}."""
-    score = 0
-    issues = []
-
-    # ── 1. Jogadores nos assentos (20 pts) ───────────────────────────────────
-    MAX_PLAYERS = 20
-    g_seats = {sn: info["name"] for sn, info in gabarito["seats"].items()}
-    o_seats = {sn: info["name"] for sn, info in output["seats"].items()}
-    all_seats = set(g_seats) | set(o_seats)
-    seat_hits = sum(1 for sn in g_seats
-                    if sn in o_seats and _name_match(g_seats[sn], o_seats[sn]))
-    seat_score = round(MAX_PLAYERS * seat_hits / max(len(g_seats), 1))
-    score += seat_score
-    if seat_hits < len(g_seats):
-        wrong = [f"seat_{sn}: esperado '{g_seats[sn]}' obtido '{o_seats.get(sn,'?')}'"
-                 for sn in g_seats if sn not in o_seats or not _name_match(g_seats[sn], o_seats[sn])]
-        issues.append(f"JOGADORES ({seat_score}/{MAX_PLAYERS}): {'; '.join(wrong)}")
-    else:
-        issues.append(f"JOGADORES ({seat_score}/{MAX_PLAYERS}): ✓")
-
-    # ── 2. Posições BTN/SB/BB/STR (15 pts) ──────────────────────────────────
-    MAX_POS = 15
-    key_positions = ["BTN", "SB", "BB", "STR"]
-    g_pos = {pos: name for name, pos in gabarito["positions"].items() if pos in key_positions}
-    o_pos = {pos: name for name, pos in output["positions"].items()  if pos in key_positions}
-    pos_hits = sum(1 for pos in g_pos
-                   if pos in o_pos and _name_match(g_pos[pos], o_pos[pos]))
-    pos_score = round(MAX_POS * pos_hits / max(len(g_pos), 1))
-    score += pos_score
-    if pos_hits < len(g_pos):
-        wrong = [f"{pos}: esperado '{g_pos[pos]}' obtido '{o_pos.get(pos,'?')}'"
-                 for pos in g_pos if pos not in o_pos or not _name_match(g_pos[pos], o_pos[pos])]
-        issues.append(f"POSIÇÕES ({pos_score}/{MAX_POS}): {'; '.join(wrong)}")
-    else:
-        issues.append(f"POSIÇÕES ({pos_score}/{MAX_POS}): ✓")
-
-    # ── 3. Ações preflop (25 pts) ────────────────────────────────────────────
-    MAX_PF = 25
-    pf_score, pf_issues = _compare_actions(gabarito["actions"]["preflop"],
-                                            output["actions"]["preflop"],
-                                            MAX_PF, "PREFLOP")
-    score += pf_score
-    issues.append(pf_issues)
-
-    # ── 4. Ações flop (15 pts) ───────────────────────────────────────────────
-    MAX_FLOP = 15
-    fl_score, fl_issues = _compare_actions(gabarito["actions"]["flop"],
-                                            output["actions"]["flop"],
-                                            MAX_FLOP, "FLOP")
-    score += fl_score
-    issues.append(fl_issues)
-
-    # ── 5. Ações turn (15 pts) ───────────────────────────────────────────────
-    MAX_TURN = 15
-    tu_score, tu_issues = _compare_actions(gabarito["actions"]["turn"],
-                                            output["actions"]["turn"],
-                                            MAX_TURN, "TURN")
-    score += tu_score
-    issues.append(tu_issues)
-
-    # ── 6. Vencedor (10 pts) ─────────────────────────────────────────────────
-    MAX_WIN = 10
-    g_win = gabarito["winner"]
-    o_win = output["winner"]
-    if _name_match(g_win, o_win):
-        score += MAX_WIN
-        issues.append(f"VENCEDOR ({MAX_WIN}/{MAX_WIN}): ✓ {g_win}")
-    else:
-        issues.append(f"VENCEDOR (0/{MAX_WIN}): esperado '{g_win}' obtido '{o_win}'")
-
-    return {"score": score, "max": 100, "issues": issues}
-
-
 def _compare_actions(g_acts, o_acts, max_pts, label):
     if not g_acts:
         return max_pts, f"{label} ({max_pts}/{max_pts}): nenhuma ação esperada ✓"
 
-    # Alinha por sequência de (player_prefix, tipo)
     matched = 0
     diffs = []
-    limit = max(len(g_acts), len(o_acts))
     for i in range(max(len(g_acts), len(o_acts))):
         ga = g_acts[i] if i < len(g_acts) else None
         oa = o_acts[i] if i < len(o_acts) else None
@@ -306,21 +231,86 @@ def _compare_actions(g_acts, o_acts, max_pts, label):
                 parts.append(f"valor: ${g_val} vs ${o_val}")
             diffs.append(f"  [{i+1}] {'; '.join(parts)}")
 
-    pts = round(max_pts * matched / len(g_acts)) if g_acts else max_pts
+    pts = round(max_pts * matched / len(g_acts))
     if not diffs:
         return pts, f"{label} ({pts}/{max_pts}): ✓"
     return pts, f"{label} ({pts}/{max_pts}):\n" + "\n".join(diffs)
 
 
+def compare_hand(gabarito: dict, output: dict) -> dict:
+    """Compara dois parsed-hands. Retorna {score, issues}. Max 100 pts."""
+    score = 0
+    issues = []
+
+    # ── 1. Jogadores (20 pts) ─────────────────────────────────────────────────
+    MAX_PLAYERS = 20
+    g_seats = {sn: info["name"] for sn, info in gabarito["seats"].items()}
+    o_seats = {sn: info["name"] for sn, info in output["seats"].items()}
+    seat_hits = sum(1 for sn in g_seats
+                    if sn in o_seats and _name_match(g_seats[sn], o_seats[sn]))
+    seat_score = round(MAX_PLAYERS * seat_hits / max(len(g_seats), 1))
+    score += seat_score
+    if seat_hits < len(g_seats):
+        wrong = [f"seat_{sn}: esperado '{g_seats[sn]}' obtido '{o_seats.get(sn,'?')}'"
+                 for sn in g_seats
+                 if sn not in o_seats or not _name_match(g_seats[sn], o_seats[sn])]
+        issues.append(f"JOGADORES ({seat_score}/{MAX_PLAYERS}): {'; '.join(wrong)}")
+    else:
+        issues.append(f"JOGADORES ({seat_score}/{MAX_PLAYERS}): ✓")
+
+    # ── 2. Posições (10 pts) ──────────────────────────────────────────────────
+    MAX_POS = 10
+    key_positions = ["BTN", "SB", "BB", "STR"]
+    g_pos = {pos: name for name, pos in gabarito["positions"].items() if pos in key_positions}
+    o_pos = {pos: name for name, pos in output["positions"].items()  if pos in key_positions}
+    pos_hits = sum(1 for pos in g_pos
+                   if pos in o_pos and _name_match(g_pos[pos], o_pos[pos]))
+    pos_score = round(MAX_POS * pos_hits / max(len(g_pos), 1))
+    score += pos_score
+    if pos_hits < len(g_pos):
+        wrong = [f"{pos}: esperado '{g_pos[pos]}' obtido '{o_pos.get(pos,'?')}'"
+                 for pos in g_pos
+                 if pos not in o_pos or not _name_match(g_pos[pos], o_pos[pos])]
+        issues.append(f"POSIÇÕES ({pos_score}/{MAX_POS}): {'; '.join(wrong)}")
+    else:
+        issues.append(f"POSIÇÕES ({pos_score}/{MAX_POS}): ✓")
+
+    # ── 3–6. Ações por street ─────────────────────────────────────────────────
+    for street, max_pts, label in [
+        ("preflop", 20, "PREFLOP"),
+        ("flop",    15, "FLOP"),
+        ("turn",    15, "TURN"),
+        ("river",   10, "RIVER"),
+    ]:
+        pts, msg = _compare_actions(
+            gabarito["actions"][street],
+            output["actions"][street],
+            max_pts, label,
+        )
+        score += pts
+        issues.append(msg)
+
+    # ── 7. Vencedor (10 pts) ──────────────────────────────────────────────────
+    MAX_WIN = 10
+    g_win = gabarito["winner"]
+    o_win = output["winner"]
+    if _name_match(g_win, o_win):
+        score += MAX_WIN
+        issues.append(f"VENCEDOR ({MAX_WIN}/{MAX_WIN}): ✓ {g_win}")
+    else:
+        issues.append(f"VENCEDOR (0/{MAX_WIN}): esperado '{g_win}' obtido '{o_win}'")
+
+    return {"score": score, "issues": issues}
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    gabarito_path = "gabarito.txt"
+    gabarito_path = os.path.normpath(GABARITO_PATH)
     if not os.path.exists(gabarito_path):
-        print("Erro: gabarito.txt não encontrado")
+        print(f"Erro: gabarito não encontrado em {gabarito_path}")
         sys.exit(1)
 
-    # Determina arquivo de output
     if len(sys.argv) > 1:
         out_path = sys.argv[1]
     else:
@@ -330,41 +320,48 @@ def main():
             sys.exit(1)
         out_path = candidates[-1]
 
-    print(f"Output: {out_path}")
+    print(f"Output : {out_path}")
     print(f"Gabarito: {gabarito_path}")
     print()
 
-    with open(gabarito_path, encoding="utf-8") as f:
-        gabarito_block = f.read()
-    gabarito = parse_hand(gabarito_block)
+    total_score = 0
+    total_max   = len(HANDS_TO_COMPARE) * 100
 
-    hand_block = extract_hand_HL3048(out_path)
-    if not hand_block:
-        print("ERRO: mesa HL3048 não encontrada no output!")
-        print("Score: 0/100")
-        sys.exit(1)
+    for table_id in HANDS_TO_COMPARE:
+        gab_block = extract_hand(table_id, gabarito_path)
+        if not gab_block:
+            print(f"[{table_id}] ERRO: mesa não encontrada no gabarito!")
+            continue
 
-    output = parse_hand(hand_block)
+        out_block = extract_hand(table_id, out_path)
+        if not out_block:
+            print(f"[{table_id}] ERRO: mesa não encontrada no output — 0/100")
+            print()
+            continue
 
-    result = compare(gabarito, output)
+        gab = parse_hand(gab_block)
+        out = parse_hand(out_block)
+        result = compare_hand(gab, out)
 
-    print("=" * 60)
-    print(f"SCORE: {result['score']}/100")
-    print("=" * 60)
-    for issue in result["issues"]:
-        print(issue)
-    print()
+        total_score += result["score"]
+        bar = "█" * (result["score"] // 5) + "░" * (20 - result["score"] // 5)
+        print(f"{'─'*60}")
+        print(f"  {table_id}   {result['score']:3d}/100  [{bar}]")
+        print(f"{'─'*60}")
+        for issue in result["issues"]:
+            print(issue)
+        if result["score"] == 100:
+            print("  ✓ PERFEITO!")
+        else:
+            print(f"  Faltam {100 - result['score']} pts.")
+        print()
 
-    if result["score"] == 100:
-        print("✓ PERFEITO — score 100/100!")
-    else:
-        print(f"Faltam {100 - result['score']} pontos.")
+    print("═" * 60)
+    bar = "█" * (total_score * 20 // total_max) + "░" * (20 - total_score * 20 // total_max)
+    print(f"  TOTAL   {total_score:3d}/{total_max}  [{bar}]")
+    print("═" * 60)
 
-    # Mostra o bloco HL3048 capturado para diagnóstico
-    print("\n--- HAND HL3048 CAPTURADA ---")
-    print(hand_block[:2000])
-
-    return result["score"]
+    return total_score
 
 
 if __name__ == "__main__":
