@@ -21,8 +21,10 @@ __pycache__/
 key_frames/
 data/
 
-# Saídas JSON (manter só o .gitkeep)
+# Saídas do pipeline (manter só o .gitkeep e o último run validado)
 output/*.json
+output/*.txt
+!output/hands_video_cortado_1min_20260522_150808.txt
 
 # Sessão do Claude
 .claude/
