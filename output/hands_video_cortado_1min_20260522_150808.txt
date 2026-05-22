@@ -1,0 +1,383 @@
+PokerStars Hand #117001: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:01 ET
+Table 'HL2332' 8-max Seat #1 is the button
+Seat 1: dLzinN ($66.80 in chips)
+Seat 2: 啦啦啦的啦 ($12.45 in chips)
+Seat 3: 都看到可能 ($37.40 in chips)
+Seat 4: ElBandido ($85.30 in chips)
+Seat 5: XTSB鱼 ($60.50 in chips)
+Seat 6: nianian ($86.00 in chips)
+Seat 7: 我是真 ($30.80 in chips)
+Seat 8: TiltLikeBuda ($52.40 in chips)
+dLzinN: posts the ante $0.05
+啦啦啦的啦: posts the ante $0.05
+都看到可能: posts the ante $0.05
+ElBandido: posts the ante $0.05
+XTSB鱼: posts the ante $0.05
+nianian: posts the ante $0.05
+我是真: posts the ante $0.05
+TiltLikeBuda: posts the ante $0.05
+*** HOLE CARDS ***
+nianian: folds
+啦啦啦的啦: bets $1.90
+我是真菜.…: calls $1.90
+TiltLikeBuda: folds
+dLzinN: folds
+都看到可能: folds
+ElBandido: folds
+XTSB鱼: folds
+我是真菜.… collected $6.71 from pot
+我是真菜.…: doesn't show hand
+*** SUMMARY ***
+Total pot $6.71 | Rake $0.00
+Seat 1: dLzinN folded before Flop (didn't bet)
+Seat 2: 啦啦啦的啦 folded
+Seat 3: 都看到可能 folded before Flop (didn't bet)
+Seat 4: ElBandido folded before Flop (didn't bet)
+Seat 5: XTSB鱼 folded before Flop (didn't bet)
+Seat 6: nianian folded before Flop (didn't bet)
+Seat 7: 我是真 folded
+Seat 8: TiltLikeBuda folded before Flop (didn't bet)
+
+PokerStars Hand #117001: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:01 ET
+Table 'HL3458' 8-max Seat #2 is the button
+Seat 2: suoha2046 ($59.80 in chips)
+Seat 3: Shenlong24 ($37.30 in chips)
+Seat 4: momsbet ($44.00 in chips)
+Seat 5: 打不赢不 ($32.10 in chips)
+Seat 6: chipboiz ($0.00 in chips)
+Seat 7: koyaak ($41.70 in chips)
+Seat 8: Niceday366 ($13.90 in chips)
+suoha2046: posts the ante $0.05
+Shenlong24: posts the ante $0.05
+momsbet: posts the ante $0.05
+打不赢不: posts the ante $0.05
+chipboiz: posts the ante $0.05
+koyaak: posts the ante $0.05
+Niceday366: posts the ante $0.05
+*** HOLE CARDS ***
+koyaak: folds
+Niceday366: folds
+suoha2046: folds
+Shenlong24: folds
+momsbet: folds
+打不赢不: checks
+*** FLOP *** [8c Ac Kd]
+chipboiz: bets $0.83
+打不赢不: calls $0.83
+*** TURN *** [8c Ac Kd] [3c]
+打不赢不: checks
+chipboiz: bets $3.12
+打不赢不: calls $3.12
+打不赢不: checks
+chipboiz: checks
+打不赢不 collected $10.40 from pot
+打不赢不: doesn't show hand
+*** SUMMARY ***
+Total pot $10.40 | Rake $0.00
+Board [8c Ac Kd 3c]
+Seat 2: suoha2046 folded before Flop (didn't bet)
+Seat 3: Shenlong24 folded before Flop (didn't bet)
+Seat 4: momsbet folded before Flop (didn't bet)
+Seat 5: 打不赢不 collected ($10.40)
+Seat 6: chipboiz folded
+Seat 7: koyaak folded before Flop (didn't bet)
+Seat 8: Niceday366 folded before Flop (didn't bet)
+
+PokerStars Hand #117001: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:01 ET
+Table 'HL4017' 8-max Seat #1 is the button
+Seat 1: dLzinN ($81.00 in chips)
+Seat 2: Phoenixy ($28.90 in chips)
+Seat 3: 浅忆心安 ($15.70 in chips)
+Seat 4: easycall86 ($3.04 in chips)
+Seat 5: taymonkha ($23.00 in chips)
+Seat 6: GongFuBoy ($38.50 in chips)
+Seat 7: Fahir651 ($42.80 in chips)
+Seat 8: 老胡头 ($28.80 in chips)
+dLzinN: posts the ante $0.05
+Phoenixy: posts the ante $0.05
+浅忆心安: posts the ante $0.05
+easycall86: posts the ante $0.05
+taymonkha: posts the ante $0.05
+GongFuBoy: posts the ante $0.05
+Fahir651: posts the ante $0.05
+老胡头: posts the ante $0.05
+Phoenixy: posts small blind $0.05
+浅忆心安: posts big blind $0.10
+easycall86: posts straddle $0.20
+*** HOLE CARDS ***
+Dealt to dLzinN [9h 4d]
+taymonkha: folds
+GongFuBoy: folds
+Fahir651: folds
+dLzinN: folds
+Phoenixy: folds
+老胡头: folds
+浅忆心安: folds
+easycall86: calls $0.60
+*** FLOP *** [5d 7c Ah]
+easycall86: checks
+taymonkha: checks
+*** TURN *** [5d 7c Ah] [3d]
+easycall86: checks
+taymonkha: checks
+easycall86: checks
+taymonkha: checks
+taymonkha collected $2.15 from pot
+taymonkha: doesn't show hand
+*** SUMMARY ***
+Total pot $2.15 | Rake $0.00
+Board [5d 7c Ah 3d]
+Seat 1: dLzinN (button) folded before Flop (didn't bet)
+Seat 2: Phoenixy (small blind) folded before Flop (didn't bet)
+Seat 3: 浅忆心安 (big blind) folded before Flop (didn't bet)
+Seat 4: easycall86 (straddle) folded
+Seat 5: taymonkha collected ($2.15)
+Seat 6: GongFuBoy folded before Flop (didn't bet)
+Seat 7: Fahir651 folded before Flop (didn't bet)
+Seat 8: 老胡头 folded before Flop (didn't bet)
+
+PokerStars Hand #117001: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:01 ET
+Table 'HL3048' 8-max Seat #3 is the button
+Seat 1: dLzinN ($20.70 in chips)
+Seat 2: Hamster813 ($32.90 in chips)
+Seat 3: ancomthit ($58.00 in chips)
+Seat 4: 能能2 ($10.00 in chips)
+Seat 5: GongFuBoy ($84.60 in chips)
+Seat 6: 你懂个嗨 ($16.90 in chips)
+Seat 7: Andylau408 ($24.50 in chips)
+Seat 8: FishGeorge ($49.70 in chips)
+dLzinN: posts the ante $0.05
+Hamster813: posts the ante $0.05
+ancomthit: posts the ante $0.05
+能能2: posts the ante $0.05
+GongFuBoy: posts the ante $0.05
+你懂个嗨: posts the ante $0.05
+Andylau408: posts the ante $0.05
+FishGeorge: posts the ante $0.05
+GongFuBoy: posts small blind $0.05
+你懂个嗨: posts big blind $0.10
+Andylau408: posts straddle $0.20
+*** HOLE CARDS ***
+Dealt to dLzinN [2h 4d 6c]
+FishGeorge: calls $0.20
+: folds
+Hamster813: raises $0.55 to $0.75
+ancomthit: folds
+能能2: folds
+GongFuBoy: folds
+你懂个嗨: folds
+Andylau408: calls $0.55
+Andylau408: calls $0.00
+FishGeorge: raises $1.38 to $2.33
+Hamster813: calls $1.58
+Hamster813: calls $2.13
+Andylau408: calls $1.58
+*** FLOP *** [9d Ad Kd]
+Andylau408: checks
+FishGeorge: checks
+Hamster813: bets $2.27
+Andylau408: folds
+FishGeorge: calls $2.27
+FishGeorge: checks
+*** TURN *** [9d Ad Kd] [6d]
+FishGeorge: folds
+Hamster813 collected $17.10 from pot
+Hamster813: doesn't show hand
+*** SUMMARY ***
+Total pot $17.10 | Rake $0.00
+Board [9d Ad Kd 6d]
+Seat 1: dLzinN folded
+Seat 2: Hamster813 collected ($17.10)
+Seat 3: ancomthit (button) folded before Flop (didn't bet)
+Seat 4: 能能2 folded before Flop (didn't bet)
+Seat 5: GongFuBoy (small blind) folded before Flop (didn't bet)
+Seat 6: 你懂个嗨 (big blind) folded before Flop (didn't bet)
+Seat 7: Andylau408 (straddle) folded on the Flop
+Seat 8: FishGeorge folded on the Turn
+
+PokerStars Hand #1307002: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:13 ET
+Table 'HL2332' 8-max Seat #1 is the button
+Seat 1: dLzinN ($66.80 in chips)
+Seat 2: 啦啦啦的啦 ($10.50 in chips)
+Seat 3: 都看到可能 ($37.40 in chips)
+Seat 4: ElBandido ($85.30 in chips)
+Seat 5: XTSB鱼 ($60.50 in chips)
+Seat 6: nianian ($86.00 in chips)
+Seat 7: 我是真菜 ($35.60 in chips)
+Seat 8: TiltLikeBuda ($52.40 in chips)
+dLzinN: posts the ante $0.05
+啦啦啦的啦: posts the ante $0.05
+都看到可能: posts the ante $0.05
+ElBandido: posts the ante $0.05
+XTSB鱼: posts the ante $0.05
+nianian: posts the ante $0.05
+我是真菜: posts the ante $0.05
+TiltLikeBuda: posts the ante $0.05
+啦啦啦的啦: posts small blind $0.05
+都看到可能: posts big blind $0.10
+ElBandido: posts straddle $0.20
+*** HOLE CARDS ***
+Dealt to dLzinN [Ah]
+XTSB鱼: calls $0.20
+nianian: folds
+我是真菜.…: folds
+TiltLikeBuda: folds
+dLzinN: raises $0.86 to $1.06
+啦啦啦的啦: folds
+都看到可能: folds
+ElBandido: folds
+XTSB鱼: calls $0.86
+*** FLOP *** [5h Qs 8d]
+XTSB鱼: checks
+XTSB鱼: calls $53.50
+dLzinN: bets $0.92
+XTSB鱼: calls $0.92
+*** TURN *** [5h Qs 8d] [Kh]
+XTSB鱼: checks
+dLzinN: bets $2.36
+XTSB鱼: folds
+Uncalled bet ($2.36) returned to dLzinN
+dLzinN collected $4.71 from pot
+dLzinN: doesn't show hand
+*** SUMMARY ***
+Total pot $4.71 | Rake $0.00
+Board [5h Qs 8d Kh]
+Seat 1: dLzinN collected ($4.71)
+Seat 2: 啦啦啦的啦 (small blind) folded before Flop (didn't bet)
+Seat 3: 都看到可能 (big blind) folded before Flop (didn't bet)
+Seat 4: ElBandido (straddle) folded before Flop (didn't bet)
+Seat 5: XTSB鱼 folded on the Turn
+Seat 6: nianian folded before Flop (didn't bet)
+Seat 7: 我是真菜 folded
+Seat 8: TiltLikeBuda folded before Flop (didn't bet)
+
+PokerStars Hand #3290002: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:32 ET
+Table 'HL3458' 8-max Seat #5 is the button
+Seat 1: Nz ($23.80 in chips)
+Seat 2: suoha2046 ($59.80 in chips)
+Seat 3: Shenlong24 ($37.30 in chips)
+Seat 4: momsbet ($44.00 in chips)
+Seat 5: 打不赢不 ($38.50 in chips)
+Seat 6: chipboiz ($61.40 in chips)
+Seat 7: koyaak ($41.70 in chips)
+Seat 8: Niceday366 ($13.90 in chips)
+Nz: posts the ante $0.05
+suoha2046: posts the ante $0.05
+Shenlong24: posts the ante $0.05
+momsbet: posts the ante $0.05
+打不赢不: posts the ante $0.05
+chipboiz: posts the ante $0.05
+koyaak: posts the ante $0.05
+Niceday366: posts the ante $0.05
+chipboiz: posts small blind $0.05
+koyaak: posts big blind $0.10
+Niceday366: posts straddle $0.20
+*** HOLE CARDS ***
+Niceday366: raises $0.10 to $0.20
+: folds
+suoha2046: folds
+Shenlong24: folds
+momsbet: raises $0.48 to $0.68
+打不赢不: calls $0.48
+打不赢不: calls $0.68
+chipboiz: folds
+koyaak: folds
+Niceday366: calls $0.48
+momsbet: bets $1.30
+打不赢不: calls $1.30
+打不赢不: folds
+*** SUMMARY ***
+Total pot $6.49 | Rake $0.00
+Seat 1: Nz folded
+Seat 2: suoha2046 folded before Flop (didn't bet)
+Seat 3: Shenlong24 folded before Flop (didn't bet)
+Seat 4: momsbet folded
+Seat 5: 打不赢不 (button) folded before Flop
+Seat 6: chipboiz (small blind) folded before Flop (didn't bet)
+Seat 7: koyaak (big blind) folded before Flop (didn't bet)
+Seat 8: Niceday366 (straddle) folded
+
+PokerStars Hand #3990002: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:00:39 ET
+Table 'HL4017' 8-max Seat #2 is the button
+Seat 1: dLzinN ($81.00 in chips)
+Seat 2: Phoenixy ($28.90 in chips)
+Seat 3: 浅忆心安 ($15.70 in chips)
+Seat 4: easycall86 ($2.44 in chips)
+Seat 5: taymonkha ($25.20 in chips)
+Seat 6: GongFuBoy ($38.50 in chips)
+Seat 7: Fahir651 ($42.80 in chips)
+Seat 8: 老胡头 ($28.80 in chips)
+dLzinN: posts the ante $0.05
+Phoenixy: posts the ante $0.05
+浅忆心安: posts the ante $0.05
+easycall86: posts the ante $0.05
+taymonkha: posts the ante $0.05
+GongFuBoy: posts the ante $0.05
+Fahir651: posts the ante $0.05
+老胡头: posts the ante $0.05
+浅忆心安: posts small blind $0.05
+easycall86: posts big blind $0.10
+taymonkha: posts straddle $0.20
+*** HOLE CARDS ***
+GongFuBoy: folds
+Fahir651: raises $0.20 to $0.40
+老胡头: folds
+dLzinN: folds
+Phoenixy: folds
+easycall86: folds
+浅忆心安: raises $1.50 to $1.90
+taymonkha: folds
+Uncalled bet ($1.50) returned to 浅忆心安
+*** SUMMARY ***
+Total pot $1.50 | Rake $0.00
+Seat 1: dLzinN folded before Flop (didn't bet)
+Seat 2: Phoenixy (button) folded before Flop (didn't bet)
+Seat 3: 浅忆心安 (small blind) folded
+Seat 4: easycall86 (big blind) folded before Flop (didn't bet)
+Seat 5: taymonkha (straddle) folded before Flop (didn't bet)
+Seat 6: GongFuBoy folded before Flop (didn't bet)
+Seat 7: Fahir651 folded
+Seat 8: 老胡头 folded before Flop (didn't bet)
+
+PokerStars Hand #6067002: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/22 00:01:00 ET
+Table 'HL3048' 8-max Seat #5 is the button
+Seat 1: dLzinN ($20.70 in chips)
+Seat 2: Hamster813 ($39.30 in chips)
+Seat 3: ancomthit ($58.00 in chips)
+Seat 4: 能能2 ($9.75 in chips)
+Seat 5: GongFuBoy ($84.50 in chips)
+Seat 6: 你懂个嗨 ($16.90 in chips)
+Seat 7: Andylau408 ($22.40 in chips)
+Seat 8: FishGeorge ($45.50 in chips)
+dLzinN: posts the ante $0.05
+Hamster813: posts the ante $0.05
+ancomthit: posts the ante $0.05
+能能2: posts the ante $0.05
+GongFuBoy: posts the ante $0.05
+你懂个嗨: posts the ante $0.05
+Andylau408: posts the ante $0.05
+FishGeorge: posts the ante $0.05
+你懂个嗨: posts small blind $0.05
+Andylau408: posts big blind $0.10
+能能2: posts straddle $0.20
+*** HOLE CARDS ***
+Dealt to dLzinN [Th]
+GongFuBoy: folds
+你懂个嗨: folds
+Andylau408: folds
+FishGeorge: folds
+dLzinN: folds
+Hamster813: folds
+ancomthit: raises $0.86 to $1.06
+能能2: folds
+Uncalled bet ($0.86) returned to ancomthit
+*** SUMMARY ***
+Total pot $1.15 | Rake $0.00
+Seat 1: dLzinN folded before Flop (didn't bet)
+Seat 2: Hamster813 folded before Flop (didn't bet)
+Seat 3: ancomthit folded
+Seat 4: 能能2 (straddle) folded before Flop (didn't bet)
+Seat 5: GongFuBoy (button) folded before Flop (didn't bet)
+Seat 6: 你懂个嗨 (small blind) folded before Flop (didn't bet)
+Seat 7: Andylau408 (big blind) folded before Flop (didn't bet)
+Seat 8: FishGeorge folded before Flop (didn't bet)
