@@ -563,6 +563,25 @@ class HandTracker:
                         street="preflop", max_bet=init_max, invested=dict(bets)
                     )
 
+                    # Detect a raise that occurred before the video started.
+                    # If exactly one seat has a bet clearly exceeding the max blind
+                    # (>= 2× STR/BB), generate the raise action retroactively so that
+                    # _infer_preflop_folds does not insert a spurious fold for that player.
+                    if len(bets) >= 2:
+                        sorted_bet_vals = sorted(bets.values())
+                        max_blind = sorted_bet_vals[min(2, len(sorted_bet_vals) - 1)]
+                        above = [(sk, v) for sk, v in bets.items()
+                                 if v >= max_blind * 2 - 0.01]
+                        if len(above) == 1:
+                            rsk, rbet = above[0]
+                            rname = current.players.get(rsk, {}).get("name", "")
+                            rpos  = current.positions.get(rsk, "")
+                            increment = round(rbet - max_blind, 2)
+                            current.actions.append(Action(
+                                rsk, rname, rpos, "raise", increment,
+                                "preflop", hand_start_ts, total_bb=round(rbet, 2)
+                            ))
+
                     active[tk]             = current
                     prev_n_cards[tk]       = n_cards
                     max_n_cards[tk]        = n_cards
@@ -791,6 +810,7 @@ class HandTracker:
 
         # Post-processing: infer silently-missed folds + reconstruct null stacks
         for hand in all_hands:
+            _fill_empty_action_names(hand)
             _infer_preflop_folds(hand, self._seat_orders.get(hand.table_key, []))
             _infer_terminal_folds(hand)
             _reconstruct_missing_stacks(hand)
@@ -799,6 +819,18 @@ class HandTracker:
 
 
 # ── pós-processamento de folds ────────────────────────────────────────────────
+
+def _fill_empty_action_names(hand: Hand) -> None:
+    """
+    Fill in missing player names in actions from hand.players.
+    Happens when OCR misses a seat name on the frame where the action was detected.
+    """
+    for action in hand.actions:
+        if not action.player and action.seat:
+            name = hand.players.get(action.seat, {}).get("name", "")
+            if name:
+                action.player = name
+
 
 def _infer_preflop_folds(hand: Hand, seat_order: list[str]) -> None:
     """
