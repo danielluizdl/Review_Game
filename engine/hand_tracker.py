@@ -340,6 +340,8 @@ def _infer_actions(
                     call_amount = round(state.max_bet - already, 2)
                 else:
                     call_amount = round(prev_bet, 2)
+                if call_amount <= 0:
+                    continue  # Zero-amount calls are spurious (player already matched max bet)
                 total_bb = already + call_amount
                 state.invested[sk] = total_bb
                 state.has_acted.add(sk)
@@ -718,10 +720,12 @@ class HandTracker:
                                     current.positions, current.players, action_street, ss_tmp
                                 )
                                 label_seats = {a.seat for a in new_actions}
+                                pot_now = frame_data.get("pot") or 0.0
                                 extra_bets = [
                                     a for a in extra_all
                                     if a.seat not in label_seats
                                     and a.action in ("bet", "raise", "allin")
+                                    and a.total_bb <= max(pot_now * 5 + 5.0, 5.0)
                                 ]
                                 if extra_bets:
                                     for ea in extra_bets:
