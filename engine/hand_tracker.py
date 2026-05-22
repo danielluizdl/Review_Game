@@ -479,7 +479,8 @@ class HandTracker:
                 table_id        = data.get("table_id", "")
                 blinds_ocr      = data.get("blinds", "")
                 community_cards      = data.get("community_cards", [])
-                community_zone_suits = data.get("community_zone_suits", [])
+                community_zone_suits  = data.get("community_zone_suits", [])
+                community_zone_count = data.get("community_zone_count", 0)
                 hero_cards           = data.get("hero_cards", [])
                 winner_labels        = data.get("winner_labels", {})
                 action_labels        = data.get("action_labels", {})
@@ -595,11 +596,21 @@ class HandTracker:
                             merged_community[existing] = c
                     merged_community = merged_community[:5]
 
+                    # Cap accumulated cards to the number of visually-present card zones.
+                    # Prevents background text ("NEXA POKER") false ranks from inflating
+                    # the card count and causing the street to jump from flop to turn.
+                    if community_zone_count > 0 and len(merged_community) > community_zone_count:
+                        safe_cap = max(community_zone_count, max_n_cards.get(tk, 0))
+                        merged_community = merged_community[:safe_cap]
+
                     # Zone-based suit correction: at stable post-animation frames OCR
                     # may miss a card rank, but colour detection is still correct.
-                    # Update suits for known cards using the per-zone colour reading.
+                    # Only correct positions within visible zones (zone_count guard)
+                    # to prevent empty-region zone colors from overwriting known suits.
                     for i, mc in enumerate(merged_community):
                         if i >= len(community_zone_suits):
+                            break
+                        if i >= community_zone_count:
                             break
                         suit = community_zone_suits[i]
                         if suit not in ("?", "s") and len(mc) >= 1:

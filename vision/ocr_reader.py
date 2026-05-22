@@ -40,7 +40,9 @@ def _map_to_regions(ocr_results: list, regions: dict, sx=1.0, sy=1.0) -> dict:
     Atribui cada detecção OCR à região cujo bounding box contém seu centro.
     Retorna dict region_name -> texto acumulado (detecções concatenadas).
     """
-    buckets = {}
+    # community_cards stores (cx, text) tuples so detections can be sorted
+    # left-to-right; other regions use plain text to preserve existing parsing.
+    buckets: dict[str, list] = {}
     for bbox, text, conf in ocr_results:
         if conf < _OCR_CONF_THRESHOLD:
             logging.debug("OCR descartado conf=%.2f texto=%r", conf, text)
@@ -52,9 +54,18 @@ def _map_to_regions(ocr_results: list, regions: dict, sx=1.0, sy=1.0) -> dict:
             rw = int(round(coords[2] * sx))
             rh = int(round(coords[3] * sy))
             if rx <= cx <= rx + rw and ry <= cy <= ry + rh:
-                buckets.setdefault(rname, []).append(text)
+                if rname == "community_cards":
+                    buckets.setdefault(rname, []).append((cx, text))
+                else:
+                    buckets.setdefault(rname, []).append(text)
                 break
-    return {k: " ".join(v) for k, v in buckets.items()}
+    result = {}
+    for k, v in buckets.items():
+        if k == "community_cards":
+            result[k] = " ".join(t for _, t in sorted(v))
+        else:
+            result[k] = " ".join(v)
+    return result
 
 
 # ── parsers ──────────────────────────────────────────────────────────────────
@@ -441,14 +452,15 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
             if val and val > 0:
                 bets[f"seat_{i}"] = val
 
-    community_cards = _parse_cards(texts.get("community_cards", ""))
-    hero_cards      = _parse_cards(texts.get("hero_cards", ""))
+    hero_cards = _parse_cards(texts.get("hero_cards", ""))
 
     # Suit detection for community cards.
     # Runs colour detection on all 5 fixed slots so the hand tracker can correct
     # suits at stable post-animation frames even when OCR misses a card rank.
     cc_region = regions.get("community_cards")
     community_zone_suits: list[str] = []
+    community_zone_count: int = 0
+    community_cards: list[str] = []
     if cc_region is not None:
         rx   = int(round(cc_region[0] * sx))
         ry   = int(round(cc_region[1] * sy))
@@ -456,16 +468,52 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
         rh   = int(round(cc_region[3] * sy))
         zone_w = rw // 5
         y1, y2 = max(0, ry), min(table_img.shape[0], ry + rh)
+        # Use center 60% of each zone to avoid color bleed from adjacent cards.
+        margin = max(1, zone_w // 5)
         for i in range(5):
             x1 = max(0, rx + i * zone_w)
             x2 = min(table_img.shape[1], x1 + zone_w)
-            community_zone_suits.append(detect_suit_by_color(table_img[y1:y2, x1:x2]))
-        # Apply detected suits to OCR-detected rank characters
-        for i in range(len(community_cards)):
-            if len(community_cards[i]) == 1 and i < len(community_zone_suits):
-                suit = community_zone_suits[i]
-                if suit != "?":
-                    community_cards[i] += suit
+            x1i = min(x1 + margin, x2 - 1)
+            x2i = max(x2 - margin, x1i + 1)
+            community_zone_suits.append(detect_suit_by_color(table_img[y1:y2, x1i:x2i]))
+        # Count consecutive bright zones (max brightness >= 180 = white card background).
+        # Stops at first dark zone so background text ("NEXA POKER") is not counted.
+        community_zone_count = 0
+        for i in range(5):
+            x1_z = max(0, rx + i * zone_w)
+            x2_z = min(table_img.shape[1], x1_z + zone_w)
+            if x2_z > x1_z:
+                crop_z = table_img[y1:y2, x1_z:x2_z]
+                if crop_z.size > 0:
+                    gray_z = cv2.cvtColor(crop_z, cv2.COLOR_BGR2GRAY)
+                    if int(gray_z.max()) >= 180:
+                        community_zone_count += 1
+                    else:
+                        break
+        # Build community_cards with suits assigned by each detection's x-position
+        # rather than by OCR array index (handles OCR missing cards in the middle).
+        cc_detections: list[tuple[float, str]] = []
+        for bbox, text, conf in ocr_results:
+            if conf < _OCR_CONF_THRESHOLD:
+                continue
+            cx, cy = _bbox_center(bbox)
+            if rx <= cx <= rx + rw and ry <= cy <= ry + rh:
+                zone_idx = min(4, int((cx - rx) / zone_w))
+                for c in _parse_cards(text):
+                    if len(c) == 1 and zone_idx < len(community_zone_suits):
+                        suit = community_zone_suits[zone_idx]
+                        if suit != "?":
+                            c = c + suit
+                    cc_detections.append((cx, c))
+        cc_detections.sort()
+        seen_ranks: set[str] = set()
+        for _, c in cc_detections:
+            rank = c[0].upper() if c else ""
+            if rank and rank not in seen_ranks:
+                seen_ranks.add(rank)
+                community_cards.append(c)
+    else:
+        community_cards = _parse_cards(texts.get("community_cards", ""))
 
     # Hero card suit detection skipped: GGPoker's gold highlight makes all hero
     # cards appear green regardless of suit, so color detection is unreliable.
@@ -552,6 +600,7 @@ def read_table(frame: np.ndarray, table_pos: list, regions: dict,
               "pot": pot, "pot_ante": pot_ante, "seats": seats, "bets": bets,
               "community_cards": community_cards, "hero_cards": hero_cards,
               "community_zone_suits": community_zone_suits,
+              "community_zone_count": community_zone_count,
               "action_labels": action_labels, "winner_labels": winner_labels,
               "dealer_seat": dealer_seat}
     return _sanitize_table_result(result)

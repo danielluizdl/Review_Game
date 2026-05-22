@@ -6,6 +6,7 @@ onde o estado do jogo mudou. Retorna quais mesas específicas mudaram para
 que o OCR só processe o que é necessário.
 """
 import cv2
+import hashlib
 import json
 import os
 import numpy as np
@@ -57,20 +58,23 @@ def _scale(coords, sx, sy):
     return int(round(x * sx)), int(round(y * sy)), int(round(w * sx)), int(round(h * sy))
 
 
-def _signature(frame, table_positions, regions, sx, sy) -> tuple[dict, dict]:
+def _roi_hashes(frame, table_positions, regions, sx, sy) -> dict:
     """
-    Retorna (sigs, action_sigs).
-    sigs: dict[table_key -> np.ndarray] — assinatura global por mesa.
-    action_sigs: dict[table_key -> dict[rname -> np.ndarray]] — por região de ação.
+    Returns dict[table_key -> dict[rname -> (hash, thumbnail)]].
+
+    Each ROI is downsampled to a 32×16 grayscale thumbnail.  The SHA256 digest
+    of that thumbnail is stored alongside the thumbnail itself so callers can
+    use the hash for an O(1) equality check (fast path: skip pixel-diff for
+    unchanged ROIs) and fall back to the thumbnail only when the hash differs.
+    This preserves the exact same mean-pixel-diff threshold semantics as the
+    previous concatenated-vector approach while avoiding redundant array work
+    for the large majority of ROIs that do not change between frames.
     """
-    # Converte todo o frame para grayscale uma única vez (evita 112 conversões por frame)
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    sigs = {}
-    action_sigs = {}
+    result: dict[str, dict[str, tuple]] = {}
     for tk, tpos in table_positions.items():
         tx, ty, _, _ = _scale(tpos, sx, sy)
-        parts = []
-        per_region = {}
+        per_roi: dict[str, tuple] = {}
         for rname in _WATCH:
             if rname not in regions.get(tk, {}):
                 continue
@@ -79,17 +83,12 @@ def _signature(frame, table_positions, regions, sx, sy) -> tuple[dict, dict]:
             x2, y2 = x1 + rw, y1 + rh
             gray = frame_gray[y1:y2, x1:x2]
             if gray.size == 0:
+                per_roi[rname] = ("", None)
                 continue
             small = cv2.resize(gray, (32, 16), interpolation=cv2.INTER_AREA)
-            vec   = small.flatten().astype(np.float32)
-            repeats = 2 if rname in _CRITICAL else 1
-            for _ in range(repeats):
-                parts.append(vec)
-            if rname in _ACTION_REGIONS:
-                per_region[rname] = vec
-        sigs[tk] = np.concatenate(parts) if parts else None
-        action_sigs[tk] = per_region
-    return sigs, action_sigs
+            per_roi[rname] = (hashlib.sha256(small.tobytes()).hexdigest(), small)
+        result[tk] = per_roi
+    return result
 
 
 def extract_key_frames(video_path, output_dir=None,
@@ -140,14 +139,12 @@ def extract_key_frames(video_path, output_dir=None,
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    key_frames          = []
-    prev_sigs           = {}   # tk -> np.ndarray da assinatura global anterior
-    prev_action_sigs    = {}   # tk -> dict[rname -> np.ndarray] das regiões de ação
-    key_sigs            = {}   # tk -> sig do último key frame salvo para essa mesa
-    key_action_sigs     = {}   # tk -> per-region sigs do último key frame dessa mesa
-    last_saved_sec      = -min_interval_sec
-    frame_idx           = 0
-    sampled             = 0
+    key_frames      = []
+    prev_rois       = {}   # tk -> dict[rname -> (hash, thumbnail)]  (último frame amostrado)
+    key_rois        = {}   # tk -> dict[rname -> (hash, thumbnail)]  (último key frame por mesa)
+    last_saved_sec  = -min_interval_sec
+    frame_idx       = 0
+    sampled         = 0
 
     while frame_idx < total_frames:
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -156,38 +153,62 @@ def extract_key_frames(video_path, output_dir=None,
             break
 
         timestamp = frame_idx / video_fps
-        sigs, action_sigs = _signature(frame, table_positions, regions, sx, sy)
+        cur_rois = _roi_hashes(frame, table_positions, regions, sx, sy)
 
         # Calcula diff por mesa — compara contra o último KEY FRAME (não o último
         # frame amostrado) para capturar animações graduais (ex: cartas sendo
-        # distribuídas lentamente). Fallback para prev_sigs no primeiro frame.
+        # distribuídas lentamente). Fallback para prev_rois no primeiro frame.
         changed_tables = []
         max_diff       = 0.0
-        for tk in sigs:
-            sig     = sigs[tk]
-            _ks     = key_sigs.get(tk)
-            anchor  = _ks if _ks is not None else prev_sigs.get(tk)
-            triggered = False
-            diff = 0.0
+        for tk, cur in cur_rois.items():
+            anchor = key_rois.get(tk) or prev_rois.get(tk)
+            if anchor is None:
+                continue
 
-            # 1) Check global médio (detector original)
-            if anchor is not None and sig is not None:
-                diff = float(np.mean(np.abs(sig - anchor)))
-                if diff >= diff_threshold:
-                    triggered = True
+            # Rebuild a concatenated diff vector using SHA256 as a fast filter:
+            # skip pixel-diff work for ROIs whose hash is unchanged (O(1) check),
+            # compute actual mean-pixel-diff only for ROIs that did change.
+            # This preserves the exact same threshold semantics as the old
+            # concatenated-vector approach while skipping most of the work.
+            total_abs_diff = 0.0
+            total_elements = 0
+            action_diff    = {}   # rname -> mean pixel diff (action regions only)
+
+            for rname, (h, small) in cur.items():
+                anc_h, anc_small = anchor.get(rname, ("", None))
+                repeats = 2 if rname in _CRITICAL else 1
+                n = 512 * repeats  # elements contributed by this ROI
+
+                if h == anc_h:
+                    # Fast path: hash identical → zero diff, skip subtraction
+                    total_elements += n
+                    continue
+
+                # Hash changed → compute actual pixel diff
+                if small is not None and anc_small is not None:
+                    rdiff = float(np.mean(np.abs(small.astype(np.float32)
+                                                 - anc_small.astype(np.float32))))
+                else:
+                    rdiff = 255.0
+                total_abs_diff += rdiff * n
+                total_elements += n
+
+                if rname in _ACTION_REGIONS:
+                    action_diff[rname] = rdiff
+
+            diff = total_abs_diff / total_elements if total_elements else 0.0
+            triggered = False
+
+            # 1) Check global médio (mesmo cálculo do detector original)
+            if diff >= diff_threshold:
+                triggered = True
 
             # 2) Check individual por região de ação (evita diluição)
-            if not triggered:
-                _kas = key_action_sigs.get(tk)
-                pa   = _kas if _kas is not None else prev_action_sigs.get(tk, {})
-                ca = action_sigs.get(tk, {})
-                for rname, vec in ca.items():
-                    if rname in pa and pa[rname] is not None:
-                        rdiff = float(np.mean(np.abs(vec - pa[rname])))
-                        if rdiff >= _ACTION_REGION_THRESHOLD:
-                            triggered = True
-                            diff = max(diff, rdiff)
-                            break
+            for rname, rdiff in action_diff.items():
+                if rdiff >= _ACTION_REGION_THRESHOLD:
+                    triggered = True
+                    diff = max(diff, rdiff)
+                    break
 
             if triggered:
                 changed_tables.append(tk)
@@ -213,17 +234,11 @@ def extract_key_frames(video_path, output_dir=None,
 
             # Âncora atualizada por mesa apenas quando essa mesa disparou o key frame
             for tk in changed_tables:
-                if sigs.get(tk) is not None:
-                    key_sigs[tk] = sigs[tk]
-                if action_sigs.get(tk):
-                    key_action_sigs[tk] = action_sigs[tk]
+                key_rois[tk] = cur_rois[tk]
 
-        # Atualiza assinaturas anteriores para cada mesa (fallback/diagnóstico)
-        for tk, sig in sigs.items():
-            if sig is not None:
-                prev_sigs[tk] = sig
-        for tk, asig in action_sigs.items():
-            prev_action_sigs[tk] = asig
+        # Atualiza ROIs do frame anterior para cada mesa (fallback/diagnóstico)
+        for tk, rois in cur_rois.items():
+            prev_rois[tk] = rois
 
         sampled   += 1
         frame_idx += step
