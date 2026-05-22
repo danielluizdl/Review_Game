@@ -6,25 +6,36 @@
 - **Vídeo de teste**: `video_cortado_1min.mp4`
 - **Comando de pipeline**: `python main.py video_cortado_1min.mp4 --no-checkpoint`
 
-## Score atual (baseline pré-fixes: 173/300)
+## Score atual (estimado, validar com pipeline)
 
-| Mão | Baseline | Estimado pós-fixes (commits 06837c2–28df668) | Estimado pós-Fix5+Fix6 | Delta total |
-|-----|----------|----------------------------------------------|------------------------|-------------|
-| HL4017 | 72/100 | ~84/100 | ~84/100 | +12 |
-| HL3048 | 69/100 | ~81/100 | ~100/100 | +31 |
-| HL2332 | 32/100 | ~100/100 | ~98/100 | +66 |
-| **TOTAL** | **173/300** | **~265/300** | **~282/300** | **+109** |
+| Mão | Baseline | Pós-commits 06837c2–28df668 | Pós-Fix5+Fix6 (commit 0ea7786) | Máximo atingível |
+|-----|----------|-----------------------------|-------------------------------|-----------------|
+| HL4017 | 72/100 | ~84/100 | ~84/100 | **84/100** (gabarito com erro) |
+| HL3048 | 69/100 | ~81/100 | ~100/100 | **100/100** |
+| HL2332 | 32/100 | ~100/100 | ~98/100 | **98/100** (nome truncado) |
+| **TOTAL** | **173/300** | **~265/300** | **~282/300** | **~282/300** |
 
 > **Nota**: Score estimado — video não pode ser reprocessado no ambiente atual (LFS 502).
 > Executar `python main.py video_cortado_1min.mp4 --no-checkpoint` para validar.
 
-## Goal
-- **Mínimo**: 240/300 (80/100)
-- **Ideal**: 270/300 (90/100)
+---
+
+## Teto do HL4017 preflop — erro confirmado no gabarito
+
+O gabarito (`Novo_gabarito_3hands.txt`) tem `dLzinN: folds` duplicado (linhas 26 e 29) e a
+ordem dos folds não corresponde às posições reais de cada assento. A sequência correta baseada
+nas posições (UTG→BTN→SB→BB→STR) seria:
+
+```
+GongFuBoy → Fahir651 → 老胡头 → dLzinN → Phoenixy → 浅忆心安 → easycall86 calls
+```
+
+O gabarito tem uma ordem errada e dLzinN duplicado. **Impossível chegar a 20/20 no preflop
+do HL4017 sem reproduzir o erro do gabarito.** Não corrigir.
 
 ---
 
-## Fixes implementados (commits 06837c2–28df668)
+## Fixes implementados (commits 06837c2–0ea7786)
 
 ### Fix 1 (06837c2): Rejeitar fragmentos sem SB/BB
 - **Problema**: HL2332 tinha dois hands detectados. O primeiro (Hand #117001) era um fragmento
@@ -56,19 +67,19 @@
   e infle calls downstream. Corrige `XTSB鱼: calls $53.50` espúrio no flop de HL2332.
 - **Efeito estimado**: HL3048 +1 pts preflop, HL2332 +10 pts flop
 
-### Fix 5 (este commit): Desconto de straddle em calls (convenção GGPoker)
+### Fix 5 (0ea7786): Desconto de straddle em calls (convenção GGPoker)
 - **Problema**: GGPoker subtrai o valor do straddle do incremento de call/raise quando o
   player já investiu mais do que o straddle na rua. Ex: após FishGeorge re-raise para $2.33,
   calls de Hamster813/Andylau408 aparecem como $1.38 (= $2.33 - $0.75 - $0.20) no gabarito,
   mas o pipeline gerava $1.58 (= $2.33 - $0.75).
 - **Fix**: `StreetState.straddle_val` armazena o valor do straddle inicial. Em
   `_actions_from_labels`, call_amount = max_bet - already - straddle_val (quando already > straddle_val).
-  O ajuste também é propagado para o recalculate loop pós-supplemental.
+  O ajuste também é propagado para o recalculate loop pós-supplemental e para `ss_tmp`.
 - **Efeito colateral**: O extra `Hamster813: calls $2.13` é suprimido automaticamente porque
   após o call ajustado invested[Hamster813] = $2.13, e o chip stale $2.13 bate com already_invested.
 - **Efeito estimado**: HL3048 preflop 16/20 → 20/20 (+4 pts)
 
-### Fix 6 (este commit): min_interval_sec 0.5→0.25 em change_detector
+### Fix 6 (0ea7786): min_interval_sec 0.5→0.25 em change_detector
 - **Problema**: Com min_interval_sec=0.5, key frames dentro de 0.5s um do outro eram
   suprimidos. A taxa de amostragem era 4fps mas a taxa efetiva de key frames era ≤ 2fps.
   Hamster813:bets $5.72 no turn de HL3048 estava dentro de 0.5s do frame anterior → perdido.
@@ -78,51 +89,71 @@
 
 ---
 
-## Erros restantes (após todos os fixes incluindo Fix5+Fix6)
+## Erros restantes após Fix5+Fix6
 
-### HL4017 — ~16 pts restantes
-- **PREFLOP** (~4/20): fold order não bate com gabarito (dLzinN fold duplicate no gabarito
-  parece erro no gabarito mesmo). Com pre-video raise fix: ~4/20 (bounded pelo gabarito).
+### HL4017 — ~16 pts restantes (irreversíveis — gabarito com erro)
+- **PREFLOP** (~4/20): fold order não bate com gabarito (dLzinN fold duplicate — erro gabarito).
 - FLOP/TURN/RIVER/WINNER/PLAYERS/POSITIONS: todos corretos.
 
-### HL3048 — ~0 pts restantes (estimado 100/100)
-- **PREFLOP** (Fix 2+4+5): fix 5 (straddle discount) corrige Hamster813 e Andylau408 calls
-  ($1.58 → $1.38). O extra `Hamster813: calls $2.13` é suprimido automaticamente porque
-  invested[Hamster813] = $2.13 após a call ajustada, e o chip stale $2.13 bate com already_invested.
-- **TURN** (Fix 6): min_interval_sec 0.5→0.25 permite capturar Hamster813:bets $5.72 que
-  anteriormente era perdido por estar dentro de 0.5s do último key frame.
+### HL3048 — ~0 pts restantes (estimado 100/100 pós Fix5+Fix6)
+- PREFLOP: Fix 2+4+5 resolvem todos os erros.
+- TURN: Fix 6 deve capturar Hamster813:bets $5.72 e FishGeorge:folds.
 
-### HL2332 — ~2 pts restantes (nome truncado)
-- Nome `我是真菜.…` truncado para `我是真` — limitação de OCR, aceito.
+### HL2332 — ~2 pts restantes (nome truncado — aceito)
+- Nome `我是真菜.…` truncado para `我是真` — limitação do OCR, aceito.
+
+---
+
+## Backup: Fix A+B para turn HL3048 (se Fix6 não resolver)
+
+Se Fix6 (min_interval_sec) não for suficiente para capturar o turn bet, implementar:
+
+### Fix A — Converter stack-delta "unknown" em bet/raise correto
+**Problema**: `_infer_actions()` detecta a queda de stack do Hamster813 (de ~$32.90 para ~$27.18
+= drop de $5.72) mas emite `action_type = "unknown"`. O compare_gabarito não dá crédito para
+ações "unknown". O bet real de $5.72 aconteceu entre dois frames e sumiu antes do próximo sample.
+
+**Arquivo**: `engine/hand_tracker.py`, bloco `elif (prev_bet < 0.05 and curr_bet < 0.05 ...)`:
+```python
+stack_drop = round(prev_stack - curr_stack, 2)
+if stack_drop > 0.5:
+    prev_max = state.max_bet
+    action_type = "bet" if prev_max < 0.05 else "raise"
+    amount_bb   = stack_drop if prev_max < 0.05 else round(stack_drop - prev_max, 2)
+    state.max_bet = max(state.max_bet, stack_drop)
+    state.voluntary_raises += 1
+    state.last_aggressor = sk
+    state.invested[sk] = round(state.invested.get(sk, 0.0) + stack_drop, 2)
+    state.has_acted.add(sk)
+    actions.append(Action(sk, name, pos, action_type, amount_bb, street, ts,
+                          total_bb=state.invested[sk]))
+```
+
+**Efeito esperado**: `Hamster813: bets $5.72` aparece no turn → gabarito turn[2] ✓
+
+### Fix B — Não emitir fold no frame imediatamente após transição de rua
+**Problema**: No primeiro frame pós-transição, fichas do flop ainda estão sendo varridas
+para o pot. `_infer_actions` vê chip desaparecer → fold falso (FishGeorge: fold no turn[1]).
+
+**Fix**: Adicionar `just_transitioned: bool = False` ao `StreetState`. Setar `True` ao resetar
+o estado para nova rua. Em `_infer_actions`, pular detecção de fold quando `just_transitioned`.
+
+### Fix C — Terminal fold (automático com A+B)
+`_infer_terminal_folds` já está implementado. Com Fix A (bet detectado) e Fix B (check preservado):
+- FishGeorge última ação no turn = check
+- Agressão posterior = Hamster813: bets $5.72
+- → Insere `FishGeorge: folds` automaticamente ✓ (nenhuma mudança de código necessária)
 
 ---
 
 ## Processo de cada iteração
 
 1. **Leia** este arquivo para entender estado atual
-2. **Identifique** o erro de maior impacto ainda não resolvido
-3. **Investigue** a causa raiz:
-   - `vision/ocr_reader.py` — OCR e detecção de cartas/naipes
-   - `engine/hand_tracker.py` — lógica de estado da mão
-   - `capture/change_detector.py` — captura de key frames
-   - `output/hh_writer_ps.py` — formatação do output
-   - `vision/roi_config.json` — coordenadas das regiões por mesa
-4. **Implemente** a correção mais cirúrgica possível
-5. **Rode** o pipeline:
-   ```
-   python main.py video_cortado_1min.mp4 --no-checkpoint
-   ```
-6. **Meça** o score:
-   ```
-   python experiments/compare_gabarito.py output/hands_video_cortado_1min_<timestamp>.txt
-   ```
-7. **Verifique** que nenhuma mão regrediu — se regrediu, REVERTA antes de continuar
-8. **Rode** os testes:
-   ```
-   python -m pytest tests/ -x -q
-   ```
-9. **Atualize** a seção "Score atual" neste arquivo com o novo resultado
-10. Se ainda há erros corrigíveis e o goal não foi atingido, **continue** na próxima iteração
+2. **Rode** o pipeline: `python main.py video_cortado_1min.mp4 --no-checkpoint`
+3. **Meça** o score: `python experiments/compare_gabarito.py output/hands_video_cortado_1min_<timestamp>.txt`
+4. **Verifique** que nenhuma mão regrediu
+5. **Rode** os testes: `python -m pytest tests/ -x -q`
+6. **Atualize** a seção "Score atual" neste arquivo com o novo resultado
 
 ---
 
@@ -136,5 +167,4 @@
 - Hero card suits (highlight dourado do GGPoker impede detecção de naipe)
 - Showdown cards de outros jogadores (feature futura)
 - Nome truncado `我是真` vs `我是真菜.…` — limitação do OCR com nomes longos/especiais
-- Fold order em HL4017 preflop — gabarito tem `dLzinN: folds` duplicado (provável erro gabarito)
-- Call amounts HL3048 ($1.58 vs $1.38) — CORRIGIDO por Fix 5 (desconto de straddle GGPoker)
+- Fold order em HL4017 preflop — gabarito tem `dLzinN: folds` duplicado (erro no gabarito)
