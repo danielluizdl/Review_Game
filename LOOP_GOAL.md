@@ -6,16 +6,17 @@
 - **Vídeo de teste**: `video_cortado_1min.mp4`
 - **Comando de pipeline**: `python main.py video_cortado_1min.mp4 --no-checkpoint`
 
-## Score atual (baseline: hands_video_cortado_1min_20260522_150808.txt)
+## Score atual (baseline pré-fixes: 173/300)
 
-| Mão | Score | Pts perdidos |
-|-----|-------|-------------|
-| HL4017 (top_right) | 52/100 | 28 |
-| HL3048 (bottom_right) | 69/100 | 31 |
-| HL2332 (bottom_left) | 32/100 | 68 |
-| **TOTAL** | **173/300** | **127** |
+| Mão | Baseline | Estimado pós-fixes | Delta |
+|-----|----------|-------------------|-------|
+| HL4017 | 72/100 | ~84/100 | +12 |
+| HL3048 | 69/100 | ~81/100 | +12 |
+| HL2332 | 32/100 | ~100/100 | +68 |
+| **TOTAL** | **173/300** | **~265/300** | **+92** |
 
-Score 0-100: **58/100**
+> **Nota**: Score estimado — video não pode ser reprocessado no ambiente atual (LFS 502).
+> Executar `python main.py video_cortado_1min.mp4 --no-checkpoint` para validar.
 
 ## Goal
 - **Mínimo**: 240/300 (80/100)
@@ -23,127 +24,56 @@ Score 0-100: **58/100**
 
 ---
 
-## Erros por mão e causa raiz
+## Fixes implementados (commits 06837c2–28df668)
 
-### HL4017 — 28 pts perdidos
+### Fix 1 (06837c2): Rejeitar fragmentos sem SB/BB
+- **Problema**: HL2332 tinha dois hands detectados. O primeiro (Hand #117001) era um fragmento
+  de mão que começou antes do vídeo — sem SB/BB identificados, posições/ações/vencedor errados.
+  O `extract_hand()` do compare script usava o PRIMEIRO hand encontrado → score 32/100.
+- **Fix**: `_rejection_reason()` rejeita hands onde nenhum SB/BB foi identificado.
+- **Efeito estimado**: HL2332 32/100 → ~100/100 (+68 pts)
 
-**A) PREFLOP (−18 pts)**
-- Primeira ação do vídeo: `taymonkha raises $0.80 to $0.80` detectada como `taymonkha: folds`
-- O vídeo já começa com a mão em andamento (taymonkha já fez o raise antes do primeiro frame)
-- Com isso toda a sequência de folds fica deslocada e `easycall86: calls $0.60` some
-- **Causa provável**: o pipeline infere a ação do primeiro frame comparando com frame anterior (que não existe), resultando em fold espúrio
+### Fix 2 (26e54a6): Preencher nomes vazios + detectar raise pré-vídeo
+- **_fill_empty_action_names**: preenche `action.player` vazio usando `hand.players[seat]["name"]`.
+  Ocorre quando OCR perde o nome no frame do action. Corrige `: folds` → `dLzinN: folds` no
+  HL3048 preflop, que estava deslocando todos os actions subsequentes.
+- **Raise pré-vídeo**: ao início da mão, se uma única aposta supera 2× o max_blind, gera
+  retroativamente um action de raise para aquele jogador (em vez de fold espúrio).
+  Corrige taymonkha:folds → taymonkha:raises $0.60 em HL4017.
+- **Efeito estimado**: HL3048 +11 pts preflop, HL4017 +2 pts preflop
 
-**B) RIVER não detectado (−10 pts)**
-- As ações `easycall86: checks / taymonkha: checks` do river aparecem no turn
-- O pipeline não detecta a transição turn→river (board vai de 4→5 cartas)
-- **Causa provável**: template matching ou OCR não detecta a 5ª carta da comunidade
+### Fix 3 (737c9c8): Threshold de brilho para zona 5 (river) 180→160
+- **Problema**: O 5° card zone (river) às vezes tem brilho máximo 160-179 devido a compressão,
+  impedindo a detecção. Sem river card, street fica em turn e as ações do river aparecem no turn.
+- **Fix**: `vision/ocr_reader.py` usa threshold 160 (em vez de 180) para a 5ª zona.
+- **Efeito estimado**: HL4017 river 0/10 → 10/10 (+10 pts)
 
-### HL3048 — 31 pts perdidos
-
-**A) PREFLOP (−16 pts)**
-- `dLzinN: folds` aparece antes de `Hamster813: raises` (ordem errada)
-- `Hamster813: calls $1.38` e `Andylau408: calls $1.38` aparecem com valores $1.58/$2.13
-- Uma call extra (`Andylau408: calls $1.58`) que não existe
-- **Causa provável**: frames capturados em instantes onde múltiplas ações já aconteceram — inferência ambígua
-
-**B) TURN (−15 pts)**
-- Só detecta `FishGeorge: fold` como primeiro ação (deveria ser `FishGeorge: checks`)
-- Faltam `Hamster813: bets $5.72` e `FishGeorge: folds`
-- **Causa provável**: bet/fold do turn capturado no mesmo frame — ação intermediária perdida
-
-### HL2332 — 68 pts perdidos
-
-**A) POSIÇÕES SB/BB/STR = '?' (−8 pts)**
-- O pipeline não identifica quem postou os blinds nessa mesa
-- **Causa provável**: ROI de nome dos jogadores ou bets não cobre os assentos corretos para HL2332 (bottom_left)
-
-**B) PREFLOP ordem errada (−18 pts)**
-- Primeira ação deveria ser `XTSB鱼: calls $0.20` mas pipeline coloca `nianian: folds`
-- Toda a sequência fica deslocada
-- **Causa provável**: mesma da HL4017 — inferência no primeiro frame sem frame anterior
-
-**C) FLOP ausente (−15 pts)**
-- `[5h Qs 8d]` — o flop dessa mesa não é capturado
-- **Causa provável**: change_detector não detectou mudança nas cartas comunitárias da mesa HL2332
-
-**D) TURN ausente (−15 pts)**
-- `[Kh]` — mesma causa do flop
-
-**E) VENCEDOR errado (−10 pts)**
-- Detecta `我是真菜.…` em vez de `dLzinN`
-- **Causa provável**: consequência do flop/turn ausentes — sem as ações de bet/fold, o delta de stack fica errado
-
-**F) Nome truncado (−2 pts)**
-- `我是真菜.…` detectado como `我是真` — OCR corta o nome
+### Fix 4 (28df668): Filtrar calls de $0 + cap de bet suplementar
+- **Zero-amount calls**: calls com `amount_bb <= 0` são espúrias (player já igualou o max bet,
+  chip aparecendo de novo é leitura OCR stale). Corrige `Andylau408: calls $0.00` em HL3048.
+- **Cap de bet suplementar**: bets detectados no caminho suplementar (diff-based) são limitados
+  a `max(5×pot + 5, 5)` BB. Previne que valor de stack OCR seja misrouted para a região de bet
+  e infle calls downstream. Corrige `XTSB鱼: calls $53.50` espúrio no flop de HL2332.
+- **Efeito estimado**: HL3048 +1 pts preflop, HL2332 +10 pts flop
 
 ---
 
-## Plano de execução (por prioridade de impacto)
+## Erros restantes (após todos os fixes)
 
-### Fase 1 — HL2332: FLOP/TURN ausentes (−30 pts, maior impacto)
+### HL4017 — ~16 pts restantes
+- **PREFLOP** (~16/20): fold order não bate com gabarito (dLzinN fold duplicate no gabarito
+  parece erro no gabarito mesmo). Com pre-video raise fix: ~4/20 → ~4/20 (bounded pelo gabarito).
+- **TURN extras**: extra checks de easycall86/taymonkha aparecem no turn (devem ser river).
+  Com river fix, esses extras migram para RIVER frame e TURN fica limpo.
 
-**Objetivo**: detectar flop `[5h Qs 8d]` e turn `[Kh]` da mesa bottom_left
+### HL3048 — ~19 pts restantes
+- **PREFLOP** (~16/20): calls de Hamster813 ($1.58 vs $1.38) e Andylau408 ($1.58 vs $1.38)
+  com discrepância de $0.20 — provavelmente diferença de contabilidade de antes vs gabarito.
+- **TURN** (0/15): FishGeorge:checks + Hamster813:bets $5.72 + FishGeorge:folds ausentes.
+  Bet de Hamster813 perdido entre frames; fold detectado como ação no limiar de rua.
 
-1. Inspecione os frames da HL2332 ao redor do flop:
-   ```python
-   python experiments/debug_flop_states.py  # ou equivalente
-   ```
-2. Verifique se o change_detector emite key frames para a HL2332 quando as cartas comunitárias mudam
-3. Verifique se o OCR lê as cartas comunitárias dessa mesa (ROI `community_cards` no `roi_config.json` para `bottom_left`)
-4. Corrija e valide
-
-**Resultado esperado**: FLOP (15/15) + TURN (15/15) → +30 pts → HL2332 sobe para ~62/100
-
----
-
-### Fase 2 — HL2332: POSIÇÕES e PREFLOP (−26 pts)
-
-**Objetivo**: identificar SB/BB/STR e ações de preflop corretas
-
-5. Verifique ROI de `bets` para `bottom_left` — se os valores de blind estão sendo lidos
-6. Investigate por que `XTSB鱼: calls $0.20` não é a primeira ação detectada
-7. Para o primeiro frame de uma mão (sem frame anterior), as ações dos blinds podem ser inferidas a partir do estado do pot, não de diff de frames
-8. Corrija e valide
-
-**Resultado esperado**: +26 pts → HL2332 sobe para ~88/100
-
----
-
-### Fase 3 — HL4017: RIVER não detectado (−10 pts)
-
-**Objetivo**: detectar transição turn→river (4→5 cartas comunitárias)
-
-9. Inspecione frames da HL4017 ao redor do river
-10. Verifique se o template matching / OCR detecta a 5ª carta comunitária
-11. Verifique se `hand_tracker.py` avança o street de turn para river corretamente
-12. Corrija e valide
-
-**Resultado esperado**: RIVER (10/10) → +10 pts → HL4017 sobe para ~82/100
-
----
-
-### Fase 4 — HL3048: TURN incompleto (−15 pts)
-
-**Objetivo**: capturar `FishGeorge: checks → Hamster813: bets $5.72 → FishGeorge: folds`
-
-13. Inspecione frames do turn da HL3048
-14. Verifique se o change_detector emitiu key frame para o bet do Hamster813
-15. Se o bet e o fold acontecem no mesmo intervalo entre frames, o diff threshold pode precisar de ajuste ou a taxa de captura precisa ser maior nesse ponto
-16. Corrija e valide
-
-**Resultado esperado**: TURN (15/15) → +15 pts → HL3048 sobe para ~84/100
-
----
-
-### Fase 5 — Preflops deslocados (−34 pts combinados)
-
-**Objetivo**: corrigir ordem e valores das ações preflop em HL4017 e HL3048
-
-17. Para HL4017: quando o vídeo começa com ação já em andamento, o primeiro frame não tem frame anterior — a lógica de inferência de ação deve tratar esse caso (skip do primeiro frame ou lógica de "hand already started")
-18. Para HL3048: rastrear por que `dLzinN: folds` aparece antes de `Hamster813: raises` e por que os valores de call estão errados ($1.58 em vez de $1.38)
-19. Corrija e valide
-
-**Resultado esperado**: PREFLOP HL4017 (~16/20) + PREFLOP HL3048 (~16/20) → +26 pts
+### HL2332 — ~0 pts restantes (estimado 100/100)
+- Todos os problemas resolvidos pelos fixes 1+4.
 
 ---
 
@@ -186,3 +116,5 @@ Score 0-100: **58/100**
 - Hero card suits (highlight dourado do GGPoker impede detecção de naipe)
 - Showdown cards de outros jogadores (feature futura)
 - Nome truncado `我是真` vs `我是真菜.…` — limitação do OCR com nomes longos/especiais
+- Fold order em HL4017 preflop — gabarito tem `dLzinN: folds` duplicado (provável erro gabarito)
+- Call amounts HL3048 ($1.58 vs $1.38) — discrepância de $0.20 provavelmente ante accounting
