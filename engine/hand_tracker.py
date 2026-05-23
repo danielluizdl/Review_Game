@@ -132,6 +132,7 @@ class StreetState:
     has_acted:        set   = field(default_factory=set)   # seats que já agiram
     limpers:          set   = field(default_factory=set)   # seats que fizeram limp
     straddle_val:     float = 0.0   # valor do straddle postado (GGPoker subtrai do call/raise)
+    just_transitioned: int  = 0     # countdown; >0 suprime fold por desaparecimento de chip
 
 
 @dataclass
@@ -217,6 +218,8 @@ def _actions_from_labels(
                             if state.straddle_val > 0 and already > state.straddle_val
                             else 0.0)
             amount = round(max(0.0, state.max_bet - already - straddle_adj), 2)
+            if amount <= 0:
+                continue  # Fix 1: straddle discount produced spurious $0 call — skip
             state.invested[sk] = round(already + amount, 2)
             state.has_acted.add(sk)
             action = Action(sk, name, pos, "call", amount, street, ts,
@@ -284,6 +287,11 @@ def _infer_actions(
     curr_seats = curr.get("seats", {})
     ts = curr["ts"]
 
+    # Fix B: countdown por frame — suprime fold de chip residual ao entrar nova rua
+    fold_suppress = state.just_transitioned > 0
+    if state.just_transitioned > 0:
+        state.just_transitioned -= 1
+
     all_seats = set(prev_seats) | set(curr_seats)
     for sk in sorted(all_seats):
         prev_bet   = prev_bets.get(sk) or 0.0
@@ -319,7 +327,12 @@ def _infer_actions(
                 state.voluntary_raises += 1
                 state.last_aggressor   = sk
 
-            state.invested[sk] = state.invested.get(sk, 0.0) + round(curr_bet - prev_bet, 2)
+            if action_type == "raise" and prev_bet < 0.02:
+                # Raise chip appeared after a gap (prev chip swept to pot).
+                # curr_bet is the total on-table for this round, not an increment.
+                state.invested[sk] = max(curr_bet, state.invested.get(sk, 0.0))
+            else:
+                state.invested[sk] = state.invested.get(sk, 0.0) + round(curr_bet - prev_bet, 2)
             state.has_acted.add(sk)
             action = Action(sk, name, pos, action_type, amount_bb, street, ts,
                             total_bb=state.invested[sk])
@@ -329,6 +342,10 @@ def _infer_actions(
             actions.append(action)
 
         elif prev_bet > 0.05 and curr_bet < 0.05:
+            # Fix B: nos primeiros frames de nova rua, chips do frame anterior ainda estão
+            # sendo varridos para o pot pela animação — pular para evitar fold falso.
+            if fold_suppress:
+                continue
             if pot_delta < 0:
                 pass
             elif sk == state.last_aggressor:
@@ -367,8 +384,26 @@ def _infer_actions(
               and prev_stack is not None and curr_stack is not None):
             stack_drop = round(prev_stack - curr_stack, 2)
             if stack_drop > 0.5:
+                # Sanity: queda de stack muito grande vs pot corrente → artefato de animação.
+                pot_now = curr.get("pot") or 0.0
+                if stack_drop > max(pot_now * 5 + 50.0, 50.0):
+                    continue
+                # Fix A: infere bet/raise a partir da queda de stack (bet ocorreu em <0.5s).
+                prev_max = state.max_bet
+                if prev_max < 0.05:
+                    action_type = "bet"
+                    amount_bb   = stack_drop
+                else:
+                    action_type = "raise"
+                    amount_bb   = round(stack_drop - prev_max, 2)
+                state.max_bet = max(state.max_bet, stack_drop)
+                state.voluntary_raises += 1
+                state.last_aggressor   = sk
+                state.invested[sk] = round(state.invested.get(sk, 0.0) + stack_drop, 2)
                 state.has_acted.add(sk)
-                actions.append(Action(sk, name, pos, "unknown", stack_drop, street, ts))
+                action = Action(sk, name, pos, action_type, amount_bb, street, ts,
+                                total_bb=state.invested[sk])
+                actions.append(action)
 
     return actions, state
 
@@ -707,10 +742,17 @@ class HandTracker:
                         if action_labels:
                             # Primário: rótulos visuais ("Desistir", "Pagar", etc.)
                             prev_labels = prev_action_labels.get(tk, {})
+                            # Captura se já houve aposta antes de processar os rótulos.
+                            # Usado para filtrar folds espúrios (sem aposta na rua) após o suplementar.
+                            pre_label_max_bet = ss.max_bet
                             new_actions, ss = _actions_from_labels(
                                 prev_labels, action_labels, bets,
                                 current.positions, current.players, action_street, ss, ts
                             )
+                            # Transição de rua: rótulos "fold" do frame de transição são
+                            # carry-over da rua anterior — ninguém pode foldar sem aposta prévia.
+                            if is_new_street:
+                                new_actions = [a for a in new_actions if a.action != "fold"]
                             # Suplementar: captura apostas visíveis na tela mas sem label
                             # (ex: oponente apostou mas label já sumiu no mesmo frame que outro
                             # jogador respondeu com label "Pagar"/"Desistir")
@@ -724,11 +766,15 @@ class HandTracker:
                                     last_aggressor=ss.last_aggressor,
                                     limpers=set(ss.limpers),
                                     straddle_val=ss.straddle_val,
+                                    just_transitioned=ss.just_transitioned,
                                 )
-                                extra_all, _ = _infer_actions(
+                                extra_all, ss_tmp_out = _infer_actions(
                                     prev_frame_data[tk], frame_data,
                                     current.positions, current.players, action_street, ss_tmp
                                 )
+                                # Propagate counter decrement back to ss so subsequent frames
+                                # see the decremented value (not the stale pre-decrement value).
+                                ss.just_transitioned = ss_tmp_out.just_transitioned
                                 label_seats = {a.seat for a in new_actions}
                                 pot_now = frame_data.get("pot") or 0.0
                                 extra_bets = [
@@ -758,6 +804,10 @@ class HandTracker:
                                             if fixed > 0.01 and abs(fixed - a.amount_bb) > 0.01:
                                                 a.amount_bb = fixed
                                                 a.total_bb = round(prior + fixed, 2)
+                            # Descarta label-folds quando não havia aposta antes NEM após o suplementar
+                            # (fold sem aposta prévia = carry-over de rua anterior ou OCR espúrio).
+                            if pre_label_max_bet < 0.05 and ss.max_bet < 0.05:
+                                new_actions = [a for a in new_actions if a.action != "fold"]
                         elif not is_new_street:
                             # Fallback: inferência por diferença de apostas
                             # Skipped on transition frames: all prev bets clear at once
@@ -790,6 +840,7 @@ class HandTracker:
                         new_ss  = StreetState(street=street)
                         if prev_ss:
                             new_ss.last_aggressor = prev_ss.last_aggressor
+                        new_ss.just_transitioned = 2  # suprime fold por 2 frames
                         street_states[tk] = new_ss
 
                     # ── fim de mão ────────────────────────────────────────────

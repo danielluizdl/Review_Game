@@ -93,7 +93,7 @@ def _roi_hashes(frame, table_positions, regions, sx, sy) -> dict:
 
 def extract_key_frames(video_path, output_dir=None,
                        sample_fps=4.0, diff_threshold=2.5,
-                       min_interval_sec=0.25, cfg: dict = None):
+                       min_interval_sec=0.5, cfg: dict = None):
     """
     Varre o vídeo e retorna os key frames onde o estado de pelo menos uma mesa mudou.
 
