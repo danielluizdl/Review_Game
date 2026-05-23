@@ -52,7 +52,7 @@ Seat 3: 浅忆心安 (big blind) folded before Flop (didn't bet)
 Seat 4: easycall86 (straddle) folded showed [Ah 8c] and lost with high card Ace
 Seat 5: taymonkha collected ($2.15) showed [Ac Td] and won ($2.15) with high card Ace
 Seat 6: GongFuBoy folded before Flop (didn't bet)
-Seat 7: Fahir651 folded
+Seat 7: Fahir651 folded (didn't bet)
 Seat 8: 老胡头 folded before Flop (didn't bet)
 
 PokerStars Hand #117001: Hold'em No Limit ($0.05/$0.10/$0.20(0.05)) - 2026/05/21 00:00:01 ET
@@ -86,7 +86,7 @@ ancomthit: folds
 GongFuBoy: folds
 你懂个嗨: folds
 Andylau408: calls $0.55
-FishGeorge: raises $1.38 to $2.33
+FishGeorge: raises $1.38 to $2.13
 Hamster813: calls $1.38
 Andylau408: calls $1.38
 *** FLOP *** [Kd Ad 9d]
